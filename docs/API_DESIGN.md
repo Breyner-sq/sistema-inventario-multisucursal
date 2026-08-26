@@ -66,6 +66,8 @@ Todo error (4xx o 5xx) responde con el mismo sobre:
 
 **Nunca** se devuelve una lista de errores como array en el nivel superior, ni un `200` con un cuerpo que indique error dentro (`{"success": false}`) — todo error usa el código HTTP correspondiente.
 
+**Implementado** en `backend/src/main/java/com/inventario/multisucursal/common/web/` (`ApiErrorResponse`, `ApiErrorBody`, `GlobalExceptionHandler`) — ver `docs/ARCHITECTURE.md`, sección 8, para el detalle de qué excepción usar en cada módulo nuevo.
+
 ---
 
 ## 4. Códigos HTTP

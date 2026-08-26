@@ -1,0 +1,10 @@
+# Perfil activo dentro de Docker Compose (host de Postgres = nombre del servicio, no localhost).
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:inventario}
+    username: ${DB_USER:inventario}
+    password: ${DB_PASSWORD:inventario}
+
+logging:
+  level:
+    root: INFO

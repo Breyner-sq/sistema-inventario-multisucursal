@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.3.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.inventario.multisucursal</groupId>
+  <artifactId>backend</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>backend</name>
+  <description>
+    Sistema de Inventario Multi-Sucursal - Backend (Java 21 + Spring Boot).
+    Esqueleto inicial: sin modulos de negocio todavia (ver docs/STATUS.md).
+  </description>
+
+  <properties>
+    <java.version>21</java.version>
+  </properties>
+
+  <dependencies>
+    <!-- API REST (docs/ARCHITECTURE.md seccion 2: capa de entrada) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Validacion estructural de DTOs en la capa de entrada (docs/ARCHITECTURE.md seccion 6) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Persistencia: Spring Data JPA / Hibernate (TD-006) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+
+    <!-- Driver PostgreSQL (TD-003) -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Migraciones de esquema versionadas: Flyway (ver docs/README de este modulo para la justificacion frente a Liquibase) -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+
+    <!-- Endpoint de health/observabilidad minima (docs/ARCHITECTURE.md seccion 8) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Spring Security + JWT + RBAC (ADR-005, TD-007, TD-008) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
+    <!--
+      JWT propio (no un servidor OAuth2 externo, ver ADR-005 y ADR-007-style
+      justification: no hay necesidad concreta de un authorization server
+      separado para 3 roles internos de una sola organizacion). jjwt es una
+      libreria liviana solo para firmar/parsear JWT HS256, sin arrastrar todo
+      spring-boot-starter-oauth2-resource-server (que asume un modelo de
+      issuer/JWK externo que no aplica aqui).
+    -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>0.12.6</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>0.12.6</version>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- Testing -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      H2 solo para el smoke test de este esqueleto (arranque de contexto + /actuator/health),
+      evitando depender de una instancia PostgreSQL real para un test que no ejercita
+      ninguna regla de negocio. Las pruebas de integracion de los modulos de negocio
+      (cuando existan constraints, locking, etc. especificos de PostgreSQL) deben usar
+      Testcontainers con PostgreSQL real, no H2 - ver docs/BUSINESS_RULES.md / docs/CRITICAL_FLOWS.md.
+    -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      Testcontainers con PostgreSQL real, exclusivamente para el test de arranque de
+      contexto + migraciones Flyway (ver FlywayMigrationIntegrationTest). Justificacion:
+      Flyway y sus constraints son especificos de PostgreSQL - probarlos contra H2 no
+      demostraria nada real. La version queda gestionada por el BOM heredado de
+      spring-boot-starter-parent.
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

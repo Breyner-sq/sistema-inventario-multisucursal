@@ -220,6 +220,22 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** 400 `NOTES_REQUERIDO` si falta el motivo; 422 `CANTIDAD_INVALIDA`; 422 `STOCK_INSUFICIENTE` si el ajuste de retiro dejaría el stock en negativo.
 - **Pruebas necesarias:** ajuste sin `notes` se rechaza; ajuste de retiro mayor al stock disponible se rechaza igual que cualquier otro retiro; ver `docs/CRITICAL_FLOWS.md`, flujo G, para el detalle de idempotencia (requiere `idempotency_key`, es una operación de creación repetible).
 
+### BR-024 — Consistencia rol/sucursal al crear o editar un usuario **[Origen: RF-037 a RF-039; DOMAIN_MODEL.md, sección 2.3]**
+
+- **Descripción:** un usuario `ADMIN` no debe tener sucursal asignada (alcance global); un usuario `MANAGER`/`OPERATOR` siempre debe tener una sucursal asignada, que además debe existir y estar activa. Regla añadida al implementar UC-14 — no estaba enumerada explícitamente en versiones anteriores de este catálogo, aunque ya se derivaba del `CHECK` de `docs/DOMAIN_MODEL.md`.
+- **Entidades afectadas:** `User`, `Branch`.
+- **Validación:** `users.UserService` valida esto en la capa de aplicación antes de escribir (defensa en profundidad), replicando el `CHECK (role_code = 'ADMIN' OR branch_id IS NOT NULL)` de `V3__create_users_table.sql`, que actúa como última línea de defensa en base de datos.
+- **Error esperado:** 422 `ADMIN_SIN_SUCURSAL` si `role=ADMIN` y se envía `branchId`; 422 `SUCURSAL_REQUERIDA` si `role≠ADMIN` y no se envía `branchId`; 404 `SUCURSAL_NO_ENCONTRADA` si el `branchId` no existe; 422 `SUCURSAL_INACTIVA` si la sucursal existe pero está desactivada.
+- **Pruebas necesarias:** las cuatro combinaciones inválidas anteriores se rechazan con su código específico; crear/editar un `MANAGER`/`OPERATOR` con una sucursal activa existente se acepta; crear un `ADMIN` sin sucursal se acepta.
+
+### BR-025 — No desactivar una sucursal con usuarios activos asignados **[Origen: UC-15, flujo alterno 1a]**
+
+- **Descripción:** no se puede desactivar una sucursal mientras tenga usuarios activos (`MANAGER`/`OPERATOR`) asignados — dejaría esos usuarios apuntando a una sucursal inactiva, una inconsistencia análoga a la que UC-15 pide evitar para inventario/transferencias (módulos todavía no implementados; esta es la instancia concreta de la regla que sí se puede aplicar hoy).
+- **Entidades afectadas:** `Branch`, `User`.
+- **Validación:** `branches.BranchService.deactivate` comprueba `existsByBranchIdAndActiveTrue` antes de desactivar. No impide desactivar una sucursal sin usuarios activos (ya reasignados o desactivados primero).
+- **Error esperado:** 409 `SUCURSAL_CON_USUARIOS_ACTIVOS`.
+- **Pruebas necesarias:** desactivar una sucursal con al menos un usuario activo asignado se rechaza; desactivarla después de reasignar/desactivar a todos sus usuarios se acepta.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)

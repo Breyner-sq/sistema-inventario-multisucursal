@@ -175,6 +175,16 @@ Ninguna regla de negocio vive en el frontend ni en la base de datos como única 
 - **Salud del servicio:** un endpoint de verificación de salud (health check) por servicio, mínimo suficiente para que Docker Compose y un operador humano puedan saber si el backend/BD están disponibles.
 - **Explícitamente fuera de alcance por ahora:** stack de métricas/tracing distribuido (Prometheus, Grafana, OpenTelemetry) — no se introduce sin una necesidad concreta (consistente con el principio de evitar infraestructura sin justificación de `CLAUDE.md`). El logging estructurado y el health check son el piso mínimo razonable para una prueba técnica; se documenta como decisión pospuesta si el proyecto creciera (sección "Decisiones pospuestas").
 
+**Implementación transversal ya disponible** (`backend/src/main/java/com/inventario/multisucursal/common/`), para que todos los módulos de negocio la reutilicen sin reinventarla:
+
+- `common.web.GlobalExceptionHandler` (`@RestControllerAdvice`): único punto que traduce excepciones a la respuesta uniforme de `docs/API_DESIGN.md` sección 3. Ningún controlador de módulo debe construir una respuesta de error a mano.
+- `common.exception.{ResourceNotFoundException, ResourceConflictException, BusinessRuleViolationException}`: las tres excepciones que un servicio de módulo lanza para 404/409/422 respectivamente. Cada una decide únicamente el *cómo* (status/forma); el *cuándo* y el *código* (`STOCK_INSUFICIENTE`, `TRANSICION_INVALIDA`, etc.) los decide siempre el servicio de negocio que la lanza, nunca esta infraestructura.
+- `common.web.CorrelationIdFilter`: resuelve/propaga `X-Request-Id` y lo deja en el MDC; el patrón de logging en `application.yml` ya lo incluye en cada línea (logging estructurado mínimo sin stack JSON, ver más arriba).
+- `common.web.PageResponse<T>`: sobre de paginación (`content/page/size/totalElements/totalPages`) que envuelve un `Page` de Spring Data sin filtrarlo directamente en la respuesta pública.
+- `common.audit.Auditable` (clase base) + `auth.JpaAuditingConfig` (resolución del auditor): columnas `createdAt/updatedAt/createdBy/updatedBy` para entidades de referencia/documento con historial de edición (no para ledgers append-only como `InventoryMovement`, que ya tienen su propio `responsible_user_id`/`occurred_at` — ver ADR-008). Desde la implementación del módulo `auth`, `createdBy`/`updatedBy` toman el email del usuario autenticado (`AuthenticatedUser`, resuelto del JWT); el placeholder `"system"` solo aparece si una escritura ocurre sin autenticación en el contexto (p. ej. pruebas de persistencia directas), lo que no debería pasar en una petición HTTP real dado que `SecurityConfig` exige autenticación salvo en el login.
+- `config.JacksonConfig`: fechas ISO-8601 en UTC. Los DTOs deben tipar sus timestamps como `java.time.Instant` (no `LocalDateTime` ni `OffsetDateTime`) para obtener el sufijo `Z` documentado en `docs/API_DESIGN.md`.
+- `auth.*`: Spring Security + JWT + RBAC (login, `/auth/me`, filtro JWT stateless, `AuthorizationService`/`@authz` para autorización por sucursal) — ver ADR-005 y la sección de autorización por endpoint de `docs/API_DESIGN.md`.
+
 ## 9. Comunicación near-real-time: cuándo SSE y cuándo no
 
 **Cuándo se usa SSE:**

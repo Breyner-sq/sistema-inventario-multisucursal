@@ -1,0 +1,282 @@
+package com.inventario.multisucursal.users;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inventario.multisucursal.auth.LoginRequest;
+import com.inventario.multisucursal.auth.LoginResponse;
+import com.inventario.multisucursal.branches.Branch;
+import com.inventario.multisucursal.branches.BranchRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * UC-14 (docs/USE_CASES.md): crear, consultar, editar y activar/desactivar
+ * usuarios asignando rol y sucursal. Cubre exactamente lo pedido: creación
+ * válida, duplicados, permisos (ADMIN-only, ni siquiera lectura para otros
+ * roles), asociación usuario-sucursal (crear y reasignar), y operaciones
+ * sobre usuario inexistente.
+ *
+ * <p>{@code patch(...)} usa {@link HttpClient} (JDK) en vez de
+ * {@code TestRestTemplate}, que no soporta el verbo PATCH sobre
+ * {@code HttpURLConnection} — ver la misma nota en {@code BranchApiTest}.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
+@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
+class UserApiTest {
+
+    private static final String SEED_PASSWORD = "ChangeMe123!";
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    @Autowired
+    private TestRestTemplate restTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private Branch branchA;
+    private Branch branchB;
+    private String adminToken;
+    private String operatorToken;
+
+    @BeforeEach
+    void setUp() {
+        userRepository.deleteAll();
+        branchRepository.deleteAll();
+
+        branchA = branchRepository.save(new Branch("SUC-A", "Sucursal A"));
+        branchB = branchRepository.save(new Branch("SUC-B", "Sucursal B"));
+
+        String hash = passwordEncoder.encode(SEED_PASSWORD);
+        userRepository.save(new User("Admin", "admin@test.local", hash, RoleCode.ADMIN, null));
+        userRepository.save(new User("Operador A", "operator@test.local", hash, RoleCode.OPERATOR, branchA.getId()));
+
+        adminToken = login("admin@test.local");
+        operatorToken = login("operator@test.local");
+    }
+
+    // ---- Creación válida y asociación usuario-sucursal ----
+
+    @Test
+    void adminCanCreateUserAssociatedToBranch() {
+        var request = new CreateUserRequest("Nuevo Operador", "nuevo@test.local", "ChangeMe123!", RoleCode.OPERATOR, branchA.getId());
+
+        ResponseEntity<UserResponse> response = post("/api/v1/users", request, adminToken, UserResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().role()).isEqualTo("OPERATOR");
+        assertThat(response.getBody().branchId()).isEqualTo(String.valueOf(branchA.getId()));
+        assertThat(response.getBody().active()).isTrue();
+    }
+
+    @Test
+    void adminCanCreateAdminWithoutBranch() {
+        var request = new CreateUserRequest("Otro Admin", "otroadmin@test.local", "ChangeMe123!", RoleCode.ADMIN, null);
+
+        ResponseEntity<UserResponse> response = post("/api/v1/users", request, adminToken, UserResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().branchId()).isNull();
+    }
+
+    @Test
+    void adminCanReassignUserToAnotherBranch() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<UserResponse> response = patch(
+                "/api/v1/users/" + userId,
+                new UpdateUserRequest("Operador A", RoleCode.OPERATOR, branchB.getId()),
+                adminToken,
+                UserResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().branchId()).isEqualTo(String.valueOf(branchB.getId()));
+    }
+
+    // ---- Duplicados ----
+
+    @Test
+    void creatingUserWithDuplicateEmailReturns409() {
+        var request = new CreateUserRequest("Otro", "operator@test.local", "ChangeMe123!", RoleCode.OPERATOR, branchA.getId());
+
+        ResponseEntity<String> response = post("/api/v1/users", request, adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).contains("\"code\":\"EMAIL_YA_EXISTE\"");
+    }
+
+    // ---- Consistencia rol/sucursal ----
+
+    @Test
+    void creatingAdminWithBranchIdIsRejected() {
+        var request = new CreateUserRequest("Admin Malo", "adminmalo@test.local", "ChangeMe123!", RoleCode.ADMIN, branchA.getId());
+
+        ResponseEntity<String> response = post("/api/v1/users", request, adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"ADMIN_SIN_SUCURSAL\"");
+    }
+
+    @Test
+    void creatingNonAdminWithoutBranchIsRejected() {
+        var request = new CreateUserRequest("Operador Malo", "opmalo@test.local", "ChangeMe123!", RoleCode.OPERATOR, null);
+
+        ResponseEntity<String> response = post("/api/v1/users", request, adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"SUCURSAL_REQUERIDA\"");
+    }
+
+    @Test
+    void creatingUserWithNonexistentBranchReturns404() {
+        var request = new CreateUserRequest("X", "x@test.local", "ChangeMe123!", RoleCode.OPERATOR, 999_999L);
+
+        ResponseEntity<String> response = post("/api/v1/users", request, adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).contains("\"code\":\"SUCURSAL_NO_ENCONTRADA\"");
+    }
+
+    @Test
+    void creatingUserWithInactiveBranchIsRejected() {
+        postAction("/api/v1/branches/" + branchB.getId() + "/deactivate", adminToken, String.class);
+        var request = new CreateUserRequest("X", "x2@test.local", "ChangeMe123!", RoleCode.OPERATOR, branchB.getId());
+
+        ResponseEntity<String> response = post("/api/v1/users", request, adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"SUCURSAL_INACTIVA\"");
+    }
+
+    @Test
+    void creatingUserWithUnknownRoleStringReturns400() {
+        HttpHeaders headers = authHeaders(adminToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String malformedBody = """
+                {"name":"X","email":"x3@test.local","password":"ChangeMe123!","role":"SUPERUSER","branchId":null}""";
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/v1/users", HttpMethod.POST, new HttpEntity<>(malformedBody, headers), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+    }
+
+    // ---- Permisos ----
+
+    @Test
+    void nonAdminCannotEvenReadUsers() {
+        ResponseEntity<String> response = getWithToken("/api/v1/users", operatorToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+    }
+
+    @Test
+    void nonAdminCannotCreateUsers() {
+        var request = new CreateUserRequest("X", "x4@test.local", "ChangeMe123!", RoleCode.OPERATOR, branchA.getId());
+
+        ResponseEntity<String> response = post("/api/v1/users", request, operatorToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    // ---- Activación / desactivación ----
+
+    @Test
+    void adminCanDeactivateAndReactivateUser() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<UserResponse> deactivated = postAction("/api/v1/users/" + userId + "/deactivate", adminToken, UserResponse.class);
+        assertThat(deactivated.getBody().active()).isFalse();
+
+        ResponseEntity<UserResponse> reactivated = postAction("/api/v1/users/" + userId + "/activate", adminToken, UserResponse.class);
+        assertThat(reactivated.getBody().active()).isTrue();
+    }
+
+    // ---- Usuario inexistente ----
+
+    @Test
+    void operationsOnNonexistentUserReturn404() {
+        long missingId = 999_999L;
+
+        assertThat(getWithToken("/api/v1/users/" + missingId, adminToken, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(patch("/api/v1/users/" + missingId, new UpdateUserRequest("X", RoleCode.OPERATOR, branchA.getId()), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(postAction("/api/v1/users/" + missingId + "/deactivate", adminToken, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    // ---- helpers ----
+
+    private String login(String email) {
+        ResponseEntity<LoginResponse> response =
+                restTemplate.postForEntity("/api/v1/auth/login", new LoginRequest(email, SEED_PASSWORD), LoginResponse.class);
+        return response.getBody().accessToken();
+    }
+
+    private <T> ResponseEntity<T> post(String path, Object body, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.POST, new HttpEntity<>(body, authHeaders(token)), responseType);
+    }
+
+    private <T> ResponseEntity<T> postAction(String path, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.POST, new HttpEntity<>(null, authHeaders(token)), responseType);
+    }
+
+    private <T> ResponseEntity<T> patch(String path, Object requestBody, String token, Class<T> responseType) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(restTemplate.getRootUri() + path))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + token)
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            T body = responseType.equals(String.class)
+                    ? responseType.cast(response.body())
+                    : objectMapper.readValue(response.body(), responseType);
+            return ResponseEntity.status(response.statusCode()).body(body);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private <T> ResponseEntity<T> getWithToken(String path, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.GET, new HttpEntity<>(authHeaders(token)), responseType);
+    }
+
+    private HttpHeaders authHeaders(String token) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        return headers;
+    }
+}
