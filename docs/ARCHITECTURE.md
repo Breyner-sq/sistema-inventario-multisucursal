@@ -1,28 +1,35 @@
-# Arquitectura del Sistema de Inventario Multi-Sucursal
+BASELINE APROBADO
 
-## 1. Objetivos arquitectónicos
-
-La arquitectura debe priorizar:
-
-- consistencia del inventario;
-- trazabilidad;
-- seguridad;
-- transacciones;
-- claridad de responsabilidades;
-- mantenibilidad;
-- simplicidad operacional;
-- facilidad de despliegue;
-- capacidad de evolución.
-
-## 2. Arquitectura general
-
-```text
+Frontend:
 React + TypeScript
-        |
-        | REST
-        v
+
+Backend:
 Java 21 + Spring Boot
-        |
-        | JPA / Hibernate
-        v
+
+Database:
 PostgreSQL
+
+API:
+REST
+
+Architecture:
+Modular Monolith
+
+Security:
+Spring Security + JWT + RBAC
+
+Infrastructure:
+Docker Compose
+
+High-level:
+
+React
+  ↓ REST
+Spring Boot
+  ↓
+PostgreSQL
+
+IMPORTANT:
+La arquitectura interna, módulos, dependencias,
+transacciones, concurrencia y demás decisiones
+serán refinadas durante las fases de diseño.
