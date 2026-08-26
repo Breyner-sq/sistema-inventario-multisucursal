@@ -4,7 +4,7 @@
 
 **Base de este documento:** `docs/DOMAIN_MODEL.md` (modelo de dominio aprobado), `docs/PROJECT_BRIEF.md`, `docs/USE_CASES.md`, `docs/ARCHITECTURE.md` (secciones 6 y 7, ubicación de reglas y estrategia transaccional).
 
-**Fecha:** 2026-08-26. Este documento reemplaza y expande la versión anterior de `BUSINESS_RULES.md` — las reglas BR-001 a BR-011 conservan el mismo identificador y significado que ya referencian otros documentos (`PROJECT_BRIEF.md`, `REQUIREMENTS_TRACEABILITY.md`, `DOMAIN_MODEL.md`); se agregan BR-012 en adelante para el resto de la cobertura pedida.
+**Fecha:** 2026-08-26 (actualizado el mismo día tras el análisis de flujos críticos). Este documento reemplaza y expande la versión anterior de `BUSINESS_RULES.md` — las reglas BR-001 a BR-011 conservan el mismo identificador y significado que ya referencian otros documentos (`PROJECT_BRIEF.md`, `REQUIREMENTS_TRACEABILITY.md`, `DOMAIN_MODEL.md`); se agregan BR-012 en adelante para el resto de la cobertura pedida. Se agrega BR-023 y se corrigen BR-008 y BR-017 tras el análisis detallado en `docs/CRITICAL_FLOWS.md`, que contiene el pseudocódigo y los diagramas de actividad que hacen operativa cada regla — consúltese ese documento para el detalle paso a paso.
 
 **Formato de cada regla:** ID, descripción, entidades afectadas, validación (qué se verifica y en qué capa), error esperado (código HTTP + slug de error) y pruebas necesarias. No se diseñan endpoints ni rutas concretas — el código de error es una convención de contrato, no una especificación de API.
 
@@ -93,7 +93,7 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 
 - **Descripción:** toda recepción parcial calcula y persiste la diferencia entre lo despachado y lo recibido.
 - **Entidades afectadas:** `TransferItem`.
-- **Validación:** al confirmar la recepción, el servicio calcula `quantity_missing = quantity_shipped - quantity_received` y lo persiste junto con `quantity_received` en la misma operación; también dispara la generación de una alerta (RF-026) — la generación de alerta reutiliza el mismo mecanismo que BR-010, no un mecanismo aparte.
+- **Validación:** al confirmar la recepción, el servicio calcula `quantity_missing = quantity_shipped - quantity_received` y lo persiste junto con `quantity_received` en la misma operación; también dispara una notificación de discrepancia abierta (RF-026). **Corrección respecto a la versión anterior de esta regla:** esta notificación **no** reutiliza `StockAlert` (esa entidad es específica para stock mínimo, BR-010) — es un evento distinto cuya condición de "abierta" se consulta directamente como `TransferItem.quantity_missing > 0 AND discrepancy_treatment IS NULL`, sin necesitar una tabla propia (ver `docs/CRITICAL_FLOWS.md`, flujo F1).
 - **Error esperado:** no aplica error propio; ver BR-014 para el caso en que `quantity_received > quantity_shipped`.
 - **Pruebas necesarias:** recepción de 45 de 50 unidades registra `quantity_missing = 5`; recepción completa dentro del mismo flujo deja `quantity_missing` en `NULL` o `0`, no ambiguo.
 
@@ -164,15 +164,13 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 ### BR-017 — Idempotencia de operaciones críticas ante reintento accidental
 
 - **Descripción:** un reintento accidental (doble clic, reintento de red, doble entrega de un mensaje) de una operación crítica no debe aplicar el efecto dos veces.
-- **Entidades afectadas:** `PurchaseOrder` (recepción), `Sale` (confirmación), `Transfer`/`TransferItem` (despacho, recepción).
-- **Validación por operación (basada en el estado del recurso, no en una clave de idempotencia enviada por el cliente, dado el alcance de esta prueba):**
-  - Confirmar recepción de compra: rechazada si `PurchaseOrder.status = RECEIVED` (BR-003).
-  - Confirmar una venta: rechazada si `Sale.status = CONFIRMED` (una venta ya confirmada no admite una segunda confirmación).
-  - Despachar una transferencia: rechazada si `Transfer.status <> APPROVED` (ya está `IN_TRANSIT` o más adelante).
-  - Confirmar recepción de una transferencia: rechazada si `Transfer.status <> IN_TRANSIT`.
-  - En todos los casos, la comprobación de estado y la escritura ocurren en la misma transacción con el mismo bloqueo (`version` u homólogo) usado para concurrencia (BR-022), de modo que dos solicitudes casi simultáneas no pasen ambas la comprobación antes de que la primera confirme su cambio de estado.
-- **Error esperado:** 409 `OPERACION_YA_APLICADA` (o el slug específico de estado, p. ej. `ORDEN_YA_RECIBIDA`, `VENTA_YA_CONFIRMADA`, `TRANSFERENCIA_ESTADO_INVALIDO`).
-- **Pruebas necesarias:** enviar la misma confirmación dos veces en sucesión rápida (simulando un doble clic) debe aplicar el efecto una sola vez y la segunda solicitud debe recibir 409, no un error 500 ni un efecto duplicado; prueba de concurrencia con dos hilos confirmando el mismo recurso al mismo tiempo.
+- **Entidades afectadas:** `PurchaseOrder`/`PurchaseOrderItem`, `Sale`, `InventoryMovement`, `Transfer`/`TransferItem`.
+- **Corrección respecto a la versión anterior de esta regla:** el análisis detallado de `docs/CRITICAL_FLOWS.md` (sección 1.1) mostró que **no todas** las operaciones críticas se protegen solo con el estado del recurso — depende de si la operación es una transición de un solo uso o una creación/evento repetible:
+  - **Transiciones de un solo uso (guarda de estado, sin clave de idempotencia):** aprobar/rechazar transferencia, despachar, confirmar recepción completa/parcial, cerrar tras tratamiento, confirmar una venta. Se protegen con `UPDATE ... WHERE status = <esperado>`; si la fila ya cambió, `0` filas afectadas → 409.
+  - **Creación o evento repetible (requiere `idempotency_key` provista por el cliente):** registrar una venta (`Sale.client_reference_id`), confirmar una recepción de compra (`InventoryMovement.idempotency_key` — una orden `PARTIALLY_RECEIVED` admite legítimamente una siguiente recepción, por lo que el estado por sí solo no distingue un reintento de la siguiente operación real) y un ajuste manual de inventario. Ver columnas pendientes de aprobación en la sección final de este documento.
+  - En ambos casos, la comprobación y la escritura ocurren en la misma transacción, con el mismo bloqueo (`version`) usado para concurrencia (BR-022), de modo que dos solicitudes casi simultáneas no pasen ambas la comprobación antes de que la primera confirme su cambio.
+- **Error esperado:** 409 `OPERACION_YA_APLICADA` para las transiciones de un solo uso (o el slug específico de estado, p. ej. `ORDEN_YA_RECIBIDA`, `TRANSFERENCIA_ESTADO_INVALIDO`); para las operaciones de categoría "creación repetible", un reintento con la misma `idempotency_key` **no es un error** — se responde con el mismo resultado ya creado.
+- **Pruebas necesarias:** enviar la misma confirmación dos veces en sucesión rápida (simulando un doble clic) debe aplicar el efecto una sola vez; para las operaciones de creación repetible, reenviar la misma `idempotency_key` debe devolver el resultado original sin duplicar el efecto, y una `idempotency_key` distinta en una recepción parcial legítima subsiguiente sí debe aplicarse. Ver `docs/CRITICAL_FLOWS.md`, escenario 3.3, para el detalle completo por operación.
 
 ### BR-018 — Autorización por rol y por alcance de sucursal
 
@@ -210,9 +208,17 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 
 - **Descripción:** dos operaciones concurrentes que afectan el mismo `Inventory` (misma combinación producto/sucursal) no deben poder aplicar ambas su efecto sobre una lectura obsoleta del stock.
 - **Entidades afectadas:** `Inventory` (columna `version`).
-- **Validación:** toda escritura sobre `Inventory.quantity_on_hand` lee la fila junto con su `version` actual y, al escribir, verifica que la versión no haya cambiado (bloqueo optimista, `docs/ARCHITECTURE.md`, sección 7); si cambió, la transacción falla con conflicto de versión y el servicio reintenta automáticamente la operación completa (releyendo el stock actualizado) un número acotado de veces antes de propagar el error al cliente.
+- **Validación:** toda escritura sobre `Inventory.quantity_on_hand` (y, por el mismo motivo, sobre `PurchaseOrderItem.quantity_received`, ver ajustes pendientes) lee la fila junto con su `version` actual y, al escribir, verifica que la versión no haya cambiado (bloqueo optimista, `docs/ARCHITECTURE.md`, sección 7); si cambió, la transacción falla con conflicto de versión y el servicio reintenta automáticamente la operación completa (releyendo el stock actualizado). **Mecanismo definido en `docs/CRITICAL_FLOWS.md` (sección 1.2):** máximo 3 intentos, con un backoff aleatorio corto entre reintentos, antes de propagar el error al cliente.
 - **Error esperado:** si se agotan los reintentos automáticos, 409 `CONFLICTO_CONCURRENCIA`. El cliente no debería ver esto en el uso normal — es la salida de emergencia cuando la contención es tan alta que ni el reintento automático la resuelve.
 - **Pruebas necesarias:** prueba de concurrencia con N hilos escribiendo sobre el mismo `Inventory` simultáneamente verifica que el resultado final es exactamente la suma/resta esperada, sin pérdidas de actualización ("lost update"); prueba que fuerza el agotamiento de reintentos y verifica el código 409.
+
+### BR-023 — El ajuste manual de inventario es una operación de excepción, no un sustituto de compra/venta/transferencia
+
+- **Descripción:** un ajuste manual (`AJUSTE_INGRESO`/`AJUSTE_RETIRO`) existe únicamente para corregir discrepancias entre el stock del sistema y el conteo físico real (mermas no capturadas, error de captura, hallazgos de inventario físico); nunca debe usarse como sustituto de un flujo de negocio ya modelado.
+- **Entidades afectadas:** `InventoryMovement`, `Inventory`.
+- **Validación:** `notes` (motivo) es obligatorio y no puede quedar vacío — a diferencia de otros movimientos, aquí no basta el valor del `ENUM reason`, porque un ajuste necesita una justificación legible por auditoría; el movimiento no puede tener poblada ninguna FK documental (`purchase_order_item_id`, `sale_item_id`, `transfer_item_id`), ya que un ajuste no cuelga de un documento comercial; se aplican además BR-012 (cantidad positiva) y la prevención general de stock negativo.
+- **Error esperado:** 400 `NOTES_REQUERIDO` si falta el motivo; 422 `CANTIDAD_INVALIDA`; 422 `STOCK_INSUFICIENTE` si el ajuste de retiro dejaría el stock en negativo.
+- **Pruebas necesarias:** ajuste sin `notes` se rechaza; ajuste de retiro mayor al stock disponible se rechaza igual que cualquier otro retiro; ver `docs/CRITICAL_FLOWS.md`, flujo G, para el detalle de idempotencia (requiere `idempotency_key`, es una operación de creación repetible).
 
 ---
 
@@ -220,7 +226,10 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 
 1. ~~`Inventory.average_unit_cost`~~ — **resuelto:** aprobado y aplicado en `docs/DOMAIN_MODEL.md` (secciones 2.7, 3.2 y 6).
 2. **Política de redondeo del costo promedio ponderado (BR-004):** aún no definida (ya señalada como pendiente en `docs/DOMAIN_MODEL.md`/`docs/STATUS.md`); se requiere decidir precisión decimal antes de implementar el cálculo.
-3. **Mecanismo exacto de reintento de BR-022** (número de reintentos, backoff): se propone un valor pequeño y fijo (p. ej. 3 intentos) para el alcance de esta prueba; no es una decisión de negocio sino de implementación, se deja abierta para la fase correspondiente.
+3. ~~Mecanismo exacto de reintento de BR-022~~ — **resuelto:** definido en `docs/CRITICAL_FLOWS.md` (sección 1.2) como 3 intentos con backoff aleatorio corto.
+4. **`PurchaseOrderItem.version`** (entero, bloqueo optimista) — identificada en `docs/CRITICAL_FLOWS.md` (flujo B, sección 4.1): necesaria porque `quantity_received` es un agregado que puede incrementarse en varias recepciones parciales concurrentes sobre la misma línea.
+5. **`Sale.client_reference_id`** (texto, `UNIQUE`, nullable) — clave de idempotencia para la creación de ventas (`docs/CRITICAL_FLOWS.md`, flujo A y sección 4.2).
+6. **`InventoryMovement.idempotency_key`** (texto, `UNIQUE` cuando no nulo) — clave de idempotencia para recepción de compra (flujo B) y ajuste manual (flujo G, BR-023), operaciones de creación repetible sin un documento contenedor con su propia referencia de cliente (`docs/CRITICAL_FLOWS.md`, sección 4.3).
 
 ## Reglas ya señaladas como pendientes en documentos previos (no se resuelven aquí)
 
