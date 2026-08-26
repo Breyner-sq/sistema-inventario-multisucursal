@@ -1,24 +1,147 @@
-# Compiled class file
+# ==================================================
+# PRIVATE / LOCAL REFERENCE FILES
+# ==================================================
+
+/private/
+
+
+# ==================================================
+# ENVIRONMENT VARIABLES / SECRETS
+# ==================================================
+
+.env
+.env.*
+!.env.example
+
+
+# ==================================================
+# JAVA / SPRING BOOT
+# ==================================================
+
+target/
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
-*.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# Maven
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+
+# ==================================================
+# NODE / REACT / TYPESCRIPT
+# ==================================================
+
+node_modules/
+dist/
+build/
+coverage/
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# ==================================================
+# IDEs / EDITORS
+# ==================================================
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+
+# ==================================================
+# OPERATING SYSTEM
+# ==================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+
+# ==================================================
+# LOGS / TEMPORARY FILES
+# ==================================================
+
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+logs/
+tmp/
+temp/
+
+
+# ==================================================
+# TEST / TOOL OUTPUT
+# ==================================================
+
+test-results/
+playwright-report/
+allure-results/
+
+
+# ==================================================
+# DATABASE / LOCAL DATA
+# ==================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+postgres-data/
+data/postgres/
+
+
+# ==================================================
+# DOCKER LOCAL OVERRIDES
+# ==================================================
+
+docker-compose.override.yml
+
+
+# ==================================================
+# CERTIFICATES / KEYS / SECRETS
+# ==================================================
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+
+
+# ==================================================
+# KEEP IMPORTANT EXAMPLE / WRAPPER FILES
+# ==================================================
+
+!.env.example
+!mvnw
+!mvnw.cmd
+!gradlew
+!gradlew.bat
