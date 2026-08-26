@@ -236,6 +236,14 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** 409 `SUCURSAL_CON_USUARIOS_ACTIVOS`.
 - **Pruebas necesarias:** desactivar una sucursal con al menos un usuario activo asignado se rechaza; desactivarla después de reasignar/desactivar a todos sus usuarios se acepta.
 
+### BR-026 — La unidad base de un producto es inmutable **[Decisión]**
+
+- **Descripción:** el factor de conversión de la unidad base de un producto (siempre `1`, por definición) no se puede modificar mediante el endpoint de edición de unidades alternativas. Regla añadida al implementar el módulo `products` para satisfacer el requisito de conversiones deterministas de BR-011 — no estaba enumerada explícitamente en versiones anteriores de este catálogo.
+- **Entidades afectadas:** `ProductUnit`.
+- **Validación:** `products.ProductUnitService.updateConversionFactor` rechaza la operación si el `ProductUnit` objetivo tiene `is_base_unit = true`, antes de aplicar el cambio.
+- **Error esperado:** 422 `UNIDAD_BASE_INMUTABLE`.
+- **Pruebas necesarias:** intentar editar el factor de conversión de la unidad base de un producto se rechaza con este código; editar el factor de una unidad alternativa (no base) se acepta.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)

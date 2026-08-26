@@ -1,8 +1,8 @@
 # Estado del Proyecto
 
-**Estado general:** En desarrollo — infraestructura, módulo `auth` y módulos `branches`/`users` (hasta el alcance de UC-14/UC-15) implementados y verificados; módulos de negocio (inventory, sales, purchases, transfers, etc.) aún no implementados.
+**Estado general:** En desarrollo — infraestructura, módulo `auth`, módulos `branches`/`users` (hasta el alcance de UC-14/UC-15) y módulo `products`/unidades de medida (hasta el alcance de esta fase) implementados y verificados; `inventory` y el resto de módulos de negocio (sales, purchases, transfers, etc.) aún no implementados.
 
-**Fase actual:** Diseño completo (requisitos, arquitectura, modelo de dominio, reglas de negocio, flujos críticos, contrato de API), esqueleto de repositorio, `auth` y `branches`/`users` verificados end-to-end. Próximo: implementación del primer módulo de negocio (products/inventory).
+**Fase actual:** Diseño completo (requisitos, arquitectura, modelo de dominio, reglas de negocio, flujos críticos, contrato de API), esqueleto de repositorio, `auth`, `branches`/`users` y `products`/unidades de medida verificados end-to-end. Próximo: `inventory` — no se avanza sin instrucción explícita ("Detente antes de inventario").
 
 # Completado
 
@@ -27,6 +27,7 @@
 - [x] Componentes transversales del backend (errores, validación, auditoría, Jackson, correlation id, paginación).
 - [x] Módulo `auth`: Spring Security + JWT + RBAC, modelo mínimo de `User`/`Role`/`Branch`, autorización por rol y por sucursal, migraciones V1–V4, verificado end-to-end contra PostgreSQL real.
 - [x] Módulos `branches`/`users` (UC-14, UC-15): CRUD de sucursales (lectura abierta, escritura ADMIN), gestión de usuarios (ADMIN-only) con asociación a sucursal, validaciones de unicidad/consistencia rol-sucursal, restricción de desactivar sucursal con usuarios activos, paginación (`docs/API_DESIGN.md`), migración V5, verificado end-to-end.
+- [x] Módulo `products` + unidades de medida (RF-005/RF-011): catálogo de unidades de medida (lectura abierta, alta ADMIN-only), CRUD de productos (lectura abierta, escritura OPERATOR/ADMIN) sin campo de stock, unidad base creada automáticamente con factor 1 al crear el producto, unidades alternativas con factor de conversión (`BigDecimal`/`NUMERIC(19,6)`, positivo, validado en el payload), unidad base inmutable (422 `UNIDAD_BASE_INMUTABLE`), sin borrado físico (solo activar/desactivar), migraciones V6–V9, verificado end-to-end.
 
 # Stack aprobado
 
@@ -43,13 +44,13 @@
 
 # Actualmente
 
-Existe infraestructura + autenticación/autorización + gestión de sucursales/usuarios funcionales, sin módulos de negocio (inventario/compras/ventas/transferencias) todavía:
+Existe infraestructura + autenticación/autorización + gestión de sucursales/usuarios + catálogo de productos/unidades de medida funcionales, sin `inventory` ni el resto de módulos de negocio (compras/ventas/transferencias) todavía:
 
-- **Backend:** Spring Boot 3.3.5 / Java 21, con `web`, `validation`, `data-jpa`, driver PostgreSQL, Flyway (V1–V5: `role`, `branch` [+ `location`], `users`, seed de usuarios de prueba), `actuator` (`/actuator/health`) y `security` (JWT propio, sin OAuth2 externo — ver ADR-005). Componentes transversales (`common/`), módulo `auth` (login, `/auth/me`, filtro JWT, `AuthorizationService`), y módulos `branches`/`users` completos hasta el alcance de UC-14/UC-15 (CRUD, activar/desactivar, paginación, `GET /roles`). 51 tests automatizados (2 se omiten con gracia sin Docker-en-Docker).
+- **Backend:** Spring Boot 3.3.5 / Java 21, con `web`, `validation`, `data-jpa`, driver PostgreSQL, Flyway (V1–V9: `role`, `branch` [+ `location`], `users`, seed de usuarios de prueba, `unit_of_measure` [+ seed UN/CJ/KG], `product`, `product_unit`), `actuator` (`/actuator/health`) y `security` (JWT propio, sin OAuth2 externo — ver ADR-005). Componentes transversales (`common/`), módulo `auth` (login, `/auth/me`, filtro JWT, `AuthorizationService`), módulos `branches`/`users` completos hasta el alcance de UC-14/UC-15 (CRUD, activar/desactivar, paginación, `GET /roles`), y módulo `products` (CRUD de productos, catálogo de unidades de medida, unidades alternativas por producto con conversión hacia la unidad base). 67 tests automatizados (2 se omiten con gracia sin Docker-en-Docker).
 - **Frontend:** React + TypeScript (Vite), sin pantallas de negocio; cliente HTTP (`axios`) configurado vía `VITE_API_BASE_URL`, listo para futuros interceptores de auth/errores.
-- **Docker Compose:** 3 servicios (`postgres`, `backend`, `frontend`) con healthchecks, red y volumen de datos propios; verificado de punta a punta con las migraciones aplicadas contra PostgreSQL real y login/JWT/RBAC/CRUD de sucursales y usuarios probados en vivo (`curl`).
+- **Docker Compose:** 3 servicios (`postgres`, `backend`, `frontend`) con healthchecks, red y volumen de datos propios; verificado de punta a punta con las migraciones aplicadas contra PostgreSQL real y login/JWT/RBAC/CRUD de sucursales, usuarios y productos (incluyendo unidades alternativas y sus reglas de conversión) probados en vivo (`curl`).
 
-No existen todavía: entidades JPA de negocio (Product, Inventory, Sale, Purchase, Transfer), migraciones ni controladores de esos módulos, ni pantallas de frontend. Esto es intencional — condición de parada explícita de esta fase.
+No existen todavía: entidades JPA de `Inventory`, `Sale`, `Purchase`, `Transfer`, migraciones ni controladores de esos módulos, ni pantallas de frontend. Esto es intencional — condición de parada explícita de esta fase ("Detente antes de inventario").
 
 # Próximas fases
 
@@ -67,7 +68,8 @@ No existen todavía: entidades JPA de negocio (Product, Inventory, Sale, Purchas
 - [x] Contrato REST.
 - [x] OpenAPI.
 - [x] Implementación del módulo `auth` (Spring Security + JWT + RBAC real).
-- [ ] Implementación de los módulos de negocio (products, inventory, purchases, sales, transfers, logistics, dashboard).
+- [x] Implementación del módulo `products` (productos + unidades de medida + conversiones).
+- [ ] Implementación de los módulos de negocio restantes (inventory, purchases, sales, transfers, logistics, dashboard).
 - [ ] Frontend: pantallas por módulo.
 
 # Infraestructura pendiente
@@ -86,8 +88,8 @@ No existen todavía: entidades JPA de negocio (Product, Inventory, Sale, Purchas
 - [x] Componentes transversales: manejo global de excepciones, formato uniforme de error, Bean Validation, Jackson (fechas ISO-8601), auditoría base (`createdAt`/`updatedAt`/`createdBy`/`updatedBy`), correlation id + logging mínimo, paginación (`docs/ARCHITECTURE.md`, sección 8; `backend/src/main/java/com/inventario/multisucursal/common/`).
 - [x] Seguridad (Spring Security + JWT + RBAC) — módulo `auth` completo: login, `/auth/me`, autorización por rol y por sucursal (`docs/adr/ADR-005-jwt-rbac.md`).
 - [x] Usuarios/Sucursales — CRUD completo hasta el alcance de UC-14/UC-15 (`branches`: lectura abierta + escritura ADMIN, activar/desactivar con guarda de usuarios activos; `users`: ADMIN-only, asociación a sucursal, `GET /roles`).
-- [ ] Productos.
-- [ ] Unidades.
+- [x] Productos — CRUD completo (lectura abierta, escritura OPERATOR/ADMIN), sin stock, sin borrado físico, SKU único, unidad base inmutable.
+- [x] Unidades — catálogo de unidades de medida (alta ADMIN-only) y unidades alternativas por producto con factor de conversión validado (`BigDecimal`/`NUMERIC(19,6)`, positivo, único índice parcial garantiza una sola unidad base por producto).
 - [ ] Inventario.
 - [ ] Movimientos.
 - [ ] Compras.
@@ -121,6 +123,7 @@ No existen todavía: entidades JPA de negocio (Product, Inventory, Sale, Purchas
 - [x] Test de arranque de contexto + migraciones Flyway contra PostgreSQL real vía Testcontainers (`FlywayMigrationIntegrationTest`; se omite con gracia — `disabledWithoutDocker` — en entornos sin Docker realmente accesible, como el sandbox usado para esta verificación).
 - [x] Tests del módulo `auth`: login válido/inválido, token ausente/expirado/manipulado, autorización por rol y por sucursal (`AuthenticationFlowTest`, 13 casos).
 - [x] Tests de `branches`/`users`: creación válida, duplicados, permisos, asociación usuario-sucursal, acceso a sucursal ajena, recursos inexistentes (`BranchApiTest` 11 casos, `UserApiTest` 13 casos).
+- [x] Tests de `products`: CRUD válido (con auto-creación de la unidad base), SKU duplicado, unidad de medida inválida (en creación de producto y al asociar unidad), factor de conversión inválido (no positivo → 400; edición de la unidad base → 422), unidad ya asociada (409), permisos (OPERATOR/ADMIN escriben productos; solo ADMIN crea unidades de medida; MANAGER sin permiso de escritura), producto inactivo (sigue siendo legible, filtro `active`, reactivación), recursos inexistentes (`ProductApiTest`, 16 casos).
 - [ ] Tests unitarios de reglas de negocio.
 - [ ] Tests de integración con PostgreSQL real de módulos de negocio (Testcontainers — ver nota en `backend/pom.xml`).
 - [ ] Tests de API.
@@ -137,10 +140,10 @@ Ver la lista consolidada y ya priorizada en `docs/DOMAIN_MODEL.md` (sección 7) 
 
 # Problemas conocidos
 
-Ninguno en la infraestructura, `auth`, `branches` o `users` actuales (verificado end-to-end contra PostgreSQL real vía Docker Compose). `JWT_SECRET` por defecto en `.env.example`/`application.yml` es solo para desarrollo local — debe reemplazarse en cualquier entorno real.
+Ninguno en la infraestructura, `auth`, `branches`, `users` o `products` actuales (verificado end-to-end contra PostgreSQL real vía Docker Compose). `JWT_SECRET` por defecto en `.env.example`/`application.yml` es solo para desarrollo local — debe reemplazarse en cualquier entorno real.
 
-El desarrollo de módulos de negocio (products, inventory, sales, purchases, transfers, etc.) todavía no ha comenzado.
+El desarrollo de `inventory` y el resto de módulos de negocio (sales, purchases, transfers, etc.) todavía no ha comenzado.
 
 # Próximo hito
 
-Implementar el primer módulo de negocio (`products`/`inventory`, los módulos base según `docs/ARCHITECTURE.md` sección 4) — no se avanza sin instrucción explícita. No se implementó `products` en esta fase por instrucción explícita ("no avances a productos").
+Implementar `inventory` (el siguiente módulo base según `docs/ARCHITECTURE.md` sección 4, que depende de `products`) — no se avanza sin instrucción explícita. No se implementó `inventory` en esta fase por instrucción explícita ("Detente antes de inventario").
