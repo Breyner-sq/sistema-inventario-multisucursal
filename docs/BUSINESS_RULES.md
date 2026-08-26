@@ -244,6 +244,14 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** 422 `UNIDAD_BASE_INMUTABLE`.
 - **Pruebas necesarias:** intentar editar el factor de conversión de la unidad base de un producto se rechaza con este código; editar el factor de una unidad alternativa (no base) se acepta.
 
+### BR-027 — El motivo de un ajuste manual debe ser compatible con su dirección **[Decisión]**
+
+- **Descripción:** un ajuste manual (BR-023) con `direction=INGRESO` solo admite `reason=DEVOLUCION` o `AJUSTE_INGRESO`; con `direction=RETIRO` solo admite `MERMA` o `AJUSTE_RETIRO`. `COMPRA`, `VENTA`, `TRANSFERENCIA_SALIDA`/`TRANSFERENCIA_ENTRADA` existen en el catálogo de `docs/DOMAIN_MODEL.md` (sección 2.8) pero ningún flujo de esta fase los produce — quedan reservados para cuando se implementen `purchases`/`sales`/`transfers`. Si no se envía `reason`, se asume `AJUSTE_INGRESO`/`AJUSTE_RETIRO` según la dirección. Regla añadida al implementar el módulo `inventory` — no estaba enumerada explícitamente en versiones anteriores de este catálogo.
+- **Entidades afectadas:** `InventoryMovement`.
+- **Validación:** `inventory.InventoryMovementService.resolveReason` verifica la pertenencia del motivo recibido al conjunto permitido para la dirección declarada, antes de crear el movimiento.
+- **Error esperado:** 422 `MOTIVO_INCOMPATIBLE_CON_DIRECCION`.
+- **Pruebas necesarias:** un ajuste `INGRESO` con `reason=MERMA` (u otro motivo de salida) se rechaza; un ajuste `INGRESO` con `reason=DEVOLUCION` se acepta; sin `reason`, el motivo por defecto corresponde a la dirección enviada.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)
