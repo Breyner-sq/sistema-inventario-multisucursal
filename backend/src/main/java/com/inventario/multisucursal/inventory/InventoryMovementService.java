@@ -8,6 +8,8 @@ import com.inventario.multisucursal.common.exception.BusinessRuleViolationExcept
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
 import com.inventario.multisucursal.common.web.PageResponse;
+import com.inventario.multisucursal.events.DomainEvent;
+import com.inventario.multisucursal.events.DomainEventPublisher;
 import com.inventario.multisucursal.products.Product;
 import com.inventario.multisucursal.products.ProductRepository;
 import com.inventario.multisucursal.products.ProductUnit;
@@ -46,6 +48,7 @@ public class InventoryMovementService {
     private final ProductRepository productRepository;
     private final ProductUnitRepository productUnitRepository;
     private final BranchRepository branchRepository;
+    private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
 
     public InventoryMovementService(
@@ -54,12 +57,14 @@ public class InventoryMovementService {
             ProductRepository productRepository,
             ProductUnitRepository productUnitRepository,
             BranchRepository branchRepository,
+            DomainEventPublisher eventPublisher,
             AuthorizationService authorizationService) {
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.productRepository = productRepository;
         this.productUnitRepository = productUnitRepository;
         this.branchRepository = branchRepository;
+        this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
     }
 
@@ -104,6 +109,7 @@ public class InventoryMovementService {
                 responsibleUserId,
                 request.notes()));
 
+        eventPublisher.publish(DomainEvent.inventoryUpdated(branch.getId(), product.getId()));
         return InventoryMovementResponse.from(movement);
     }
 

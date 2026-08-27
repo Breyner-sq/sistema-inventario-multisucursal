@@ -8,6 +8,8 @@ import com.inventario.multisucursal.common.exception.BusinessRuleViolationExcept
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
 import com.inventario.multisucursal.common.web.PageResponse;
+import com.inventario.multisucursal.events.DomainEvent;
+import com.inventario.multisucursal.events.DomainEventPublisher;
 import com.inventario.multisucursal.inventory.Inventory;
 import com.inventario.multisucursal.inventory.InventoryMovement;
 import com.inventario.multisucursal.inventory.InventoryMovementRepository;
@@ -75,6 +77,7 @@ public class TransferService {
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
     private final RouteService routeService;
+    private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
 
     public TransferService(
@@ -85,6 +88,7 @@ public class TransferService {
             InventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
             RouteService routeService,
+            DomainEventPublisher eventPublisher,
             AuthorizationService authorizationService) {
         this.transferRepository = transferRepository;
         this.transferItemRepository = transferItemRepository;
@@ -93,6 +97,7 @@ public class TransferService {
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.routeService = routeService;
+        this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
     }
 
@@ -180,6 +185,7 @@ public class TransferService {
                 throw new ResourceConflictException("TRANSICION_INVALIDA", "La línea ya tenía una cantidad aprobada.");
             }
         }
+        publishStatusChanged(transfer);
         return buildResponse(transferId);
     }
 
@@ -190,6 +196,7 @@ public class TransferService {
         if (transferRepository.markRejected(transferId, rejectedByUserId, Instant.now()) == 0) {
             throw new ResourceConflictException("TRANSICION_INVALIDA", "La transferencia ya no está en estado REQUESTED.");
         }
+        publishStatusChanged(transfer);
         return buildResponse(transferId);
     }
 
@@ -237,8 +244,10 @@ public class TransferService {
                     item.getProductId(), transfer.getOriginBranchId(), MovementDirection.RETIRO,
                     MovementReason.TRANSFERENCIA_SALIDA, quantityShipped, item.getUnitOfMeasureId(),
                     dispatchedByUserId, null, item.getId()));
+            eventPublisher.publish(DomainEvent.inventoryUpdated(transfer.getOriginBranchId(), item.getProductId()));
         }
 
+        publishStatusChanged(transfer);
         return buildResponse(transferId);
     }
 
@@ -282,6 +291,14 @@ public class TransferService {
                         item.getProductId(), transfer.getDestinationBranchId(), MovementDirection.INGRESO,
                         MovementReason.TRANSFERENCIA_ENTRADA, quantityReceived, item.getUnitOfMeasureId(),
                         receivedByUserId, null, item.getId()));
+                eventPublisher.publish(DomainEvent.inventoryUpdated(transfer.getDestinationBranchId(), item.getProductId()));
+            }
+
+            if (storedMissing != null) {
+                // Faltante abierto: el evento avisa a quien deba decidir el tratamiento
+                // (flujo F1). No reutiliza StockAlert, que es de stock mínimo (BR-008).
+                eventPublisher.publish(DomainEvent.transferDiscrepancyOpened(
+                        transferId, transfer.getOriginBranchId(), transfer.getDestinationBranchId()));
             }
         }
 
@@ -296,6 +313,7 @@ public class TransferService {
             if (transferRepository.markReceived(transferId, newStatus, Instant.now()) == 0) {
                 throw new ResourceConflictException("TRANSICION_INVALIDA", "La transferencia ya no está en tránsito.");
             }
+            publishStatusChanged(transfer);
         }
 
         return buildResponse(transferId);
@@ -337,6 +355,7 @@ public class TransferService {
         TransferStatus finalStatus = transfer.getStatus();
         if (!anyUntreated && transferRepository.markClosed(transferId) == 1) {
             finalStatus = TransferStatus.CLOSED;
+            publishStatusChanged(transfer);
         }
 
         return new DiscrepancyTreatmentResponse(
@@ -491,6 +510,17 @@ public class TransferService {
     private TransferResponse buildResponse(Long transferId) {
         Transfer transfer = findOrThrow(transferId);
         return TransferResponse.from(transfer, transferItemRepository.findByTransferId(transferId));
+    }
+
+    /**
+     * Señal de que la transferencia cambió de estado (RF-029). Se publica
+     * dentro de la transacción pero solo se emite tras el commit — si la
+     * operación termina en rollback, nadie recibe aviso de una transición que
+     * no ocurrió (ADR-007).
+     */
+    private void publishStatusChanged(Transfer transfer) {
+        eventPublisher.publish(DomainEvent.transferStatusChanged(
+                transfer.getId(), transfer.getOriginBranchId(), transfer.getDestinationBranchId()));
     }
 
     /**

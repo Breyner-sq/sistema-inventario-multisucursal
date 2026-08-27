@@ -9,6 +9,8 @@ import com.inventario.multisucursal.common.exception.BusinessRuleViolationExcept
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
 import com.inventario.multisucursal.common.web.PageResponse;
+import com.inventario.multisucursal.events.DomainEvent;
+import com.inventario.multisucursal.events.DomainEventPublisher;
 import com.inventario.multisucursal.inventory.Inventory;
 import com.inventario.multisucursal.inventory.InventoryMovement;
 import com.inventario.multisucursal.inventory.InventoryMovementRepository;
@@ -66,6 +68,7 @@ public class SaleService {
     private final PriceRepository priceRepository;
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
+    private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
 
     public SaleService(
@@ -78,6 +81,7 @@ public class SaleService {
             PriceRepository priceRepository,
             InventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
+            DomainEventPublisher eventPublisher,
             AuthorizationService authorizationService) {
         this.saleRepository = saleRepository;
         this.saleItemRepository = saleItemRepository;
@@ -88,6 +92,7 @@ public class SaleService {
         this.priceRepository = priceRepository;
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
+        this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
     }
 
@@ -152,6 +157,7 @@ public class SaleService {
             movementRepository.save(new InventoryMovement(
                     product.getId(), branch.getId(), MovementDirection.RETIRO, MovementReason.VENTA,
                     itemRequest.quantity(), unitOfMeasureId, soldByUserId, null, savedItem.getId()));
+            eventPublisher.publish(DomainEvent.inventoryUpdated(branch.getId(), product.getId()));
 
             items.add(savedItem);
             subtotal = subtotal.add(lineSubtotal);

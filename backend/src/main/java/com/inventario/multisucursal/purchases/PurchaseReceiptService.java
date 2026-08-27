@@ -5,6 +5,8 @@ import com.inventario.multisucursal.common.exception.BadRequestException;
 import com.inventario.multisucursal.common.exception.BusinessRuleViolationException;
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
+import com.inventario.multisucursal.events.DomainEvent;
+import com.inventario.multisucursal.events.DomainEventPublisher;
 import com.inventario.multisucursal.inventory.Inventory;
 import com.inventario.multisucursal.inventory.InventoryMovement;
 import com.inventario.multisucursal.inventory.InventoryMovementRepository;
@@ -58,6 +60,7 @@ public class PurchaseReceiptService {
     private final InventoryMovementRepository movementRepository;
     private final ProductRepository productRepository;
     private final ProductUnitRepository productUnitRepository;
+    private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
 
     public PurchaseReceiptService(
@@ -67,6 +70,7 @@ public class PurchaseReceiptService {
             InventoryMovementRepository movementRepository,
             ProductRepository productRepository,
             ProductUnitRepository productUnitRepository,
+            DomainEventPublisher eventPublisher,
             AuthorizationService authorizationService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.purchaseOrderItemRepository = purchaseOrderItemRepository;
@@ -74,6 +78,7 @@ public class PurchaseReceiptService {
         this.movementRepository = movementRepository;
         this.productRepository = productRepository;
         this.productUnitRepository = productUnitRepository;
+        this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
     }
 
@@ -125,6 +130,7 @@ public class PurchaseReceiptService {
                         null,
                         item.getId(),
                         derivedKey));
+                eventPublisher.publish(DomainEvent.inventoryUpdated(order.getBranchId(), item.getProductId()));
             }
 
             receivedItems.add(new PurchaseReceiptResponse.ReceivedItem(
