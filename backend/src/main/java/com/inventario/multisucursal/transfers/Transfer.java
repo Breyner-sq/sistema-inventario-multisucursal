@@ -58,6 +58,16 @@ public class Transfer {
     @Column(nullable = false)
     private boolean urgency;
 
+    /**
+     * Ruta clasificada del par origen-destino, resuelta automáticamente al
+     * crear la transferencia (RF-028). Nula si ese par aún no tiene ruta
+     * clasificada. Es una conveniencia de visualización: la pertenencia real
+     * a una ruta la define el par de sucursales, que no puede desincronizarse
+     * (BR-036).
+     */
+    @Column(name = "route_id")
+    private Long routeId;
+
     @Column(name = "carrier_name", length = 150)
     private String carrierName;
 
@@ -98,12 +108,14 @@ public class Transfer {
             Long destinationBranchId,
             boolean urgency,
             Long requestedByUserId,
-            String clientReferenceId) {
+            String clientReferenceId,
+            Long routeId) {
         this.transferNumber = transferNumber;
         this.originBranchId = originBranchId;
         this.destinationBranchId = destinationBranchId;
         this.status = TransferStatus.REQUESTED;
         this.urgency = urgency;
+        this.routeId = routeId;
         this.requestedByUserId = requestedByUserId;
         this.requestedAt = Instant.now();
         this.clientReferenceId = clientReferenceId;
@@ -132,6 +144,10 @@ public class Transfer {
 
     public boolean isUrgency() {
         return urgency;
+    }
+
+    public Long getRouteId() {
+        return routeId;
     }
 
     public String getCarrierName() {

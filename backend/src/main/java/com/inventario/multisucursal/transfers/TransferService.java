@@ -14,6 +14,8 @@ import com.inventario.multisucursal.inventory.InventoryMovementRepository;
 import com.inventario.multisucursal.inventory.InventoryRepository;
 import com.inventario.multisucursal.inventory.MovementDirection;
 import com.inventario.multisucursal.inventory.MovementReason;
+import com.inventario.multisucursal.logistics.Route;
+import com.inventario.multisucursal.logistics.RouteService;
 import com.inventario.multisucursal.products.Product;
 import com.inventario.multisucursal.products.ProductRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -72,6 +74,7 @@ public class TransferService {
     private final ProductRepository productRepository;
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
+    private final RouteService routeService;
     private final AuthorizationService authorizationService;
 
     public TransferService(
@@ -81,6 +84,7 @@ public class TransferService {
             ProductRepository productRepository,
             InventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
+            RouteService routeService,
             AuthorizationService authorizationService) {
         this.transferRepository = transferRepository;
         this.transferItemRepository = transferItemRepository;
@@ -88,6 +92,7 @@ public class TransferService {
         this.productRepository = productRepository;
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
+        this.routeService = routeService;
         this.authorizationService = authorizationService;
     }
 
@@ -114,7 +119,8 @@ public class TransferService {
 
         Transfer transfer = transferRepository.save(new Transfer(
                 generateTransferNumber(), request.originBranchId(), request.destinationBranchId(),
-                request.urgency(), requestedByUserId, idempotencyKey));
+                request.urgency(), requestedByUserId, idempotencyKey,
+                resolveRouteId(request.originBranchId(), request.destinationBranchId())));
 
         Set<Long> seenProducts = new HashSet<>();
         for (CreateTransferItemRequest itemRequest : request.items()) {
@@ -314,7 +320,8 @@ public class TransferService {
         if (request.treatment() == DiscrepancyTreatment.REENVIO) {
             Transfer followUp = transferRepository.save(new Transfer(
                     generateTransferNumber(), transfer.getOriginBranchId(), transfer.getDestinationBranchId(),
-                    transfer.isUrgency(), treatedByUserId, null));
+                    transfer.isUrgency(), treatedByUserId, null,
+                    resolveRouteId(transfer.getOriginBranchId(), transfer.getDestinationBranchId())));
             transferItemRepository.save(new TransferItem(
                     followUp.getId(), item.getProductId(), item.getUnitOfMeasureId(), item.getQuantityMissing()));
             followUpTransferId = followUp.getId();
@@ -484,6 +491,30 @@ public class TransferService {
     private TransferResponse buildResponse(Long transferId) {
         Transfer transfer = findOrThrow(transferId);
         return TransferResponse.from(transfer, transferItemRepository.findByTransferId(transferId));
+    }
+
+    /**
+     * La ruta se deduce del par de sucursales, nunca llega en el payload
+     * (RF-028; BR-036). Si ese par todavía no está clasificado, la
+     * transferencia queda sin ruta — no es un error.
+     */
+    private Long resolveRouteId(Long originBranchId, Long destinationBranchId) {
+        return routeService.findByBranchPair(originBranchId, destinationBranchId).map(Route::getId).orElse(null);
+    }
+
+    /**
+     * Lectura para el reporte de cumplimiento logístico (RF-030), que vive en
+     * el módulo `reports` — hoja del grafo de dependencias
+     * (docs/ARCHITECTURE.md, sección 4), que lee de otros módulos a través de
+     * su capa de servicio y nunca de sus repositorios.
+     *
+     * <p>No aplica autorización por sucursal: la aplica el propio servicio de
+     * reportes, que es quien conoce el alcance pedido y las reglas de
+     * docs/API_DESIGN.md sección 6 para ese endpoint.
+     */
+    public List<Transfer> findDispatchedForCompliance(
+            Long branchId, Long originBranchId, Long destinationBranchId, Instant dispatchedFrom, Instant dispatchedTo) {
+        return transferRepository.findDispatchedForCompliance(branchId, originBranchId, destinationBranchId, dispatchedFrom, dispatchedTo);
     }
 
     private String generateTransferNumber() {

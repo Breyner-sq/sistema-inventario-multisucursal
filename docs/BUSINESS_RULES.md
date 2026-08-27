@@ -316,6 +316,30 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** no aplica — ambos son caminos válidos, no rechazos.
 - **Pruebas necesarias:** recepción completa deja `quantityMissing` nulo; recepción de 0 de N deja `quantityMissing = N`, sin fila de inventario ni movimiento en el destino.
 
+### BR-036 — La ruta de una transferencia se deriva del par de sucursales, no de un campo tecleado **[Decisión]**
+
+- **Descripción:** `docs/DOMAIN_MODEL.md` (2.18) prevé `Transfer.route_id`, y la tabla `route` tiene `UNIQUE (origin_branch_id, destination_branch_id)` (2.17). Eso significa que el par de sucursales **ya identifica** la ruta: guardar además `route_id` es una denormalización. Se resuelve así: `route_id` existe (el modelo aprobado lo pide) pero **se asigna solo**, resolviendo el par al crear la transferencia — nunca llega en el payload —, y el reporte de cumplimiento agrupa y filtra **por el par de sucursales**, no por `route_id`. Consecuencia deseada: una transferencia creada antes de que su ruta fuera clasificada tiene `route_id` nulo pero **igual aparece** en el reporte de esa ruta, porque el par no puede desincronizarse.
+- **Entidades afectadas:** `Transfer`, `Route`.
+- **Validación:** `TransferService.resolveRouteId` consulta `RouteService.findByBranchPair` al crear la transferencia (y su reenvío); `LogisticsComplianceService` traduce el filtro `routeId` a su par origen-destino antes de consultar.
+- **Error esperado:** no aplica — que un par no tenga ruta clasificada no es un error, deja `route_id` nulo.
+- **Pruebas necesarias:** una transferencia creada tras clasificar la ruta recibe su `routeId` sin enviarlo en el payload; una creada antes sigue contando en el reporte de esa ruta.
+
+### BR-037 — Una ruta se clasifica con una sola etiqueta y su par origen-destino es inmutable **[Decisión]**
+
+- **Descripción:** `docs/DOMAIN_MODEL.md` (2.17) dejaba abierto si `classification` es una etiqueta o un conjunto ("o combinable como conjunto si se requiere más de una etiqueta"). Se opta por **una sola** etiqueta (`PRIORITY`/`COST`/`TIME`): RF-028 pide clasificar "por al menos uno de los tres criterios", y un conjunto exigiría una tabla puente que ningún requisito justifica hoy. Además, el par origen-destino es la identidad de negocio de la ruta y por tanto **no es editable**: `PATCH /routes/{id}` solo cambia la clasificación (`docs/API_DESIGN.md` 7.9: "actualiza clasificación"); cambiar el par no sería reclasificar esta ruta sino crear otra distinta.
+- **Entidades afectadas:** `Route`.
+- **Validación:** `UpdateRouteRequest` solo expone `classification`; `CHECK` en base de datos restringe los tres valores y `UNIQUE (origin, destination)` impide duplicar el par.
+- **Error esperado:** 409 `RUTA_YA_EXISTE` al clasificar dos veces el mismo par; 422 `ORIGEN_IGUAL_DESTINO`.
+- **Pruebas necesarias:** reclasificar cambia solo la clasificación; duplicar el par se rechaza; origen igual a destino se rechaza.
+
+### BR-038 — El cumplimiento logístico se calcula, no se almacena **[Decisión]**
+
+- **Descripción:** ninguna métrica de cumplimiento se persiste. Todo se deriva, en tiempo de consulta, de datos que el propio flujo de transferencias ya escribió: `dispatched_at`, `received_at`, `estimated_arrival_date` y `status`. No existe una columna "entregado a tiempo" ni un contador materializado que pudiera contradecir los hechos. Precisiones que esto obliga a fijar: (a) una transferencia **sin despacho** no entra al reporte —no tiene tiempo de entrega que medir— y por tanto no cuenta ni como cumplida ni como incumplida; (b) una entrega despachada **sin fecha estimada** se cuenta aparte (`notEvaluable`) en vez de asumirse puntual, que inflaría el indicador; (c) el porcentaje de cumplimiento se calcula solo sobre las entregas evaluables y es **nulo**, no 100%, cuando no hay ninguna; (d) "recibida con faltante" y "recibida tarde" son indicadores independientes: una entrega puede ser puntual e incompleta a la vez.
+- **Entidades afectadas:** ninguna nueva — `Transfer` (solo lectura), `Route` (solo lectura).
+- **Validación:** `LogisticsComplianceService` es de solo lectura; `reports` es hoja del grafo de dependencias (`docs/ARCHITECTURE.md`, sección 4) y lee `transfers` y `logistics` a través de sus servicios, nunca de sus repositorios.
+- **Error esperado:** un rango sin datos devuelve un reporte vacío con 200, no un 404 (UC-12, flujo alterno 3a).
+- **Pruebas necesarias:** estimado vs. real con una entrega puntual y una tardía; transferencia sin despacho excluida; recepción parcial contada como entregada y como faltante; despacho sin fecha estimada no contado como puntual; rango vacío devuelve 200.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)
@@ -327,7 +351,7 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 5. ~~`Sale.client_reference_id`~~ — **resuelto:** aplicado al implementar el módulo `sales` (migración V18). A diferencia de `InventoryMovement.idempotency_key` en la recepción de compra (BR-029, derivada por línea), aquí una sola clave por sucursal/solicitud basta: la venta completa (cabecera + todas sus líneas) se verifica de una sola vez, antes de procesar ninguna línea (docs/CRITICAL_FLOWS.md, flujo A).
 6. ~~`InventoryMovement.idempotency_key`~~ — **parcialmente resuelto:** aplicado al implementar el módulo `purchases` (migración V15) para la recepción de compra (flujo B) — clave derivada `<Idempotency-Key del header>:<purchaseOrderItemId>`, ver BR-029. **Sigue pendiente** para el ajuste manual de inventario (flujo G, BR-023): la fase de `inventory` implementó ese endpoint sin idempotencia real (documentado en `docs/STATUS.md` como limitación conocida de esa fase) y no se retrofactoriza aquí — no era parte del alcance pedido para `purchases`.
 
-7. **`Transfer.route_id`** (`docs/DOMAIN_MODEL.md` 2.18) — **no aplicado todavía:** la entidad `Route` pertenece al módulo `logistics`, explícitamente fuera del alcance de la fase de `transfers`. La columna y su FK se agregarán junto con esa tabla, igual que `sale_item_id`/`transfer_item_id` se agregaron a `inventory_movement` al implementar cada módulo que los originaba.
+7. ~~`Transfer.route_id`~~ — **resuelto:** aplicado al implementar el módulo `logistics` (migraciones V24–V25), junto con la tabla `route` de la que depende. Se asigna automáticamente desde el par origen-destino, nunca desde el payload (BR-036).
 
 ## Reglas ya señaladas como pendientes en documentos previos (no se resuelven aquí)
 

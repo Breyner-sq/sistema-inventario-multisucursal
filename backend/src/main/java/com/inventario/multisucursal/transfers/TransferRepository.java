@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -75,6 +76,39 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
              WHERE t.id = :id AND t.status = com.inventario.multisucursal.transfers.TransferStatus.RECEIVED_PARTIAL
             """)
     int markClosed(@Param("id") Long id);
+
+    /**
+     * Base del reporte de cumplimiento logístico (RF-027, RF-030): solo
+     * transferencias efectivamente despachadas — una transferencia sin
+     * despacho no tiene tiempo de entrega que medir y no puede contarse ni
+     * como cumplida ni como incumplida.
+     *
+     * <p>El filtro por ruta llega resuelto como par origen-destino, no como
+     * {@code route_id}: ese par es la identidad de la ruta (UNIQUE en la
+     * tabla {@code route}) y no puede quedar desincronizado, así que el
+     * reporte incluye también las transferencias creadas antes de que su
+     * ruta fuera clasificada (BR-036).
+     *
+     * <p>{@code dispatchedFrom}/{@code dispatchedTo} nunca llegan nulos — el
+     * servicio les da límites amplios por defecto, por la misma razón ya
+     * documentada en {@code InventoryMovementRepository}: PostgreSQL no puede
+     * inferir el tipo de un {@code Instant} nulo dentro de una comparación.
+     */
+    @Query("""
+            SELECT t FROM Transfer t
+             WHERE t.dispatchedAt IS NOT NULL
+               AND t.dispatchedAt >= :dispatchedFrom AND t.dispatchedAt <= :dispatchedTo
+               AND (:branchId IS NULL OR t.originBranchId = :branchId OR t.destinationBranchId = :branchId)
+               AND (:originBranchId IS NULL OR t.originBranchId = :originBranchId)
+               AND (:destinationBranchId IS NULL OR t.destinationBranchId = :destinationBranchId)
+             ORDER BY t.dispatchedAt DESC
+            """)
+    List<Transfer> findDispatchedForCompliance(
+            @Param("branchId") Long branchId,
+            @Param("originBranchId") Long originBranchId,
+            @Param("destinationBranchId") Long destinationBranchId,
+            @Param("dispatchedFrom") Instant dispatchedFrom,
+            @Param("dispatchedTo") Instant dispatchedTo);
 
     /**
      * Lectura: una transferencia es visible desde su sucursal origen o su
