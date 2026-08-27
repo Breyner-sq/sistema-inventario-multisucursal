@@ -13,3 +13,13 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none
+
+# El latido SSE programado no debe dispararse durante las pruebas: un envío
+# espontáneo a un emisor simulado hace fallar de forma intermitente a los tests
+# que verifican que NO se emitió nada (p. ej. cuando la transacción revierte).
+# El latido tiene su propia prueba, que lo invoca directamente
+# (EventStreamApiTest#heartbeatReleasesTheSubscriptionOfAClientThatWentAway),
+# así que no hace falta que el planificador lo ejecute solo.
+app:
+  events:
+    heartbeat-interval-ms: 86400000

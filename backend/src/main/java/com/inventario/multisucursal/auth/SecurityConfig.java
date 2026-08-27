@@ -16,6 +16,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 /**
  * TD-007/TD-008 (docs/DECISIONS.md), ADR-005 (docs/adr/ADR-005-jwt-rbac.md):
@@ -23,6 +29,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * no hay sesión de servidor (sin cookies, por eso CSRF se deshabilita — es
  * una protección relevante solo cuando la autenticación viaja en una cookie
  * que el navegador reenvía automáticamente).
+ *
+ * <p><b>CORS:</b> el frontend se sirve desde un origen distinto al de la API
+ * (nginx en un puerto, Spring Boot en otro), así que el navegador exige una
+ * política explícita — sin ella bloquea toda petición, incluido el login.
+ * Los orígenes permitidos llegan por configuración (`app.cors.allowed-origins`),
+ * nunca hardcodeados, para que cada entorno declare el suyo.
  */
 @Configuration
 @EnableMethodSecurity
@@ -50,6 +62,36 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
+    /**
+     * Orígenes autorizados a llamar a la API desde un navegador. Se listan de
+     * forma explícita (nunca `*`): un comodín permitiría que cualquier sitio
+     * web hiciera peticiones con el token de la persona usuaria si lograra
+     * leerlo.
+     */
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    private List<String> allowedOrigins;
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(allowedOrigins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        // Idempotency-Key es obligatorio en las operaciones de creación repetible
+        // (docs/API_DESIGN.md, sección 2); sin declararlo, el preflight lo rechazaría.
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Request-Id", "Accept"));
+        // Se expone el identificador de correlación para que el cliente pueda
+        // mostrarlo y cruzarlo con los logs del backend.
+        configuration.setExposedHeaders(List.of("X-Request-Id"));
+        // Sin credenciales: la autenticación viaja en el encabezado Authorization,
+        // no en cookies, así que el navegador no necesita enviarlas.
+        configuration.setAllowCredentials(false);
+        configuration.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -57,6 +99,7 @@ public class SecurityConfig {
             JsonAuthenticationEntryPoint authenticationEntryPoint,
             JsonAccessDeniedHandler accessDeniedHandler) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

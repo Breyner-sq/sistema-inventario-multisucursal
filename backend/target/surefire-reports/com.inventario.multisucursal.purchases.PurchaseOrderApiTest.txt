@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.purchases.PurchaseOrderApiTest
 -------------------------------------------------------------------------------
-Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.380 s -- in com.inventario.multisucursal.purchases.PurchaseOrderApiTest
+Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.417 s -- in com.inventario.multisucursal.purchases.PurchaseOrderApiTest
