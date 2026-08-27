@@ -61,6 +61,12 @@ public class InventoryMovement {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "idempotency_key", length = 150)
+    private String idempotencyKey;
+
+    @Column(name = "purchase_order_item_id")
+    private Long purchaseOrderItemId;
+
     protected InventoryMovement() {
         // JPA
     }
@@ -84,6 +90,28 @@ public class InventoryMovement {
         this.occurredAt = Instant.now();
         this.notes = notes;
         this.createdAt = Instant.now();
+    }
+
+    /**
+     * Constructor para movimientos de recepción de compra (flujo B; BR-003,
+     * BR-004), con la FK documental hacia {@code PurchaseOrderItem} y la
+     * clave de idempotencia (categoría 2 — creación repetible,
+     * docs/CRITICAL_FLOWS.md, sección 1.1).
+     */
+    public InventoryMovement(
+            Long productId,
+            Long branchId,
+            MovementDirection direction,
+            MovementReason reason,
+            BigDecimal quantity,
+            Long unitOfMeasureId,
+            Long responsibleUserId,
+            String notes,
+            Long purchaseOrderItemId,
+            String idempotencyKey) {
+        this(productId, branchId, direction, reason, quantity, unitOfMeasureId, responsibleUserId, notes);
+        this.purchaseOrderItemId = purchaseOrderItemId;
+        this.idempotencyKey = idempotencyKey;
     }
 
     public Long getId() {
@@ -128,5 +156,13 @@ public class InventoryMovement {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public Long getPurchaseOrderItemId() {
+        return purchaseOrderItemId;
     }
 }

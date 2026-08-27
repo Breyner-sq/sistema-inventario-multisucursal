@@ -36,6 +36,26 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("newQuantity") BigDecimal newQuantity,
             @Param("now") Instant now);
 
+    /**
+     * Variante de {@link #applyQuantity} para la recepción de compra
+     * (flujo B; BR-004, BR-016): actualiza cantidad y costo promedio
+     * ponderado de forma atómica — nunca puede persistirse el cambio de
+     * stock sin el recálculo de costo, ni viceversa (BR-016).
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE Inventory i
+               SET i.quantityOnHand = :newQuantity, i.averageUnitCost = :newAverageUnitCost,
+                   i.version = i.version + 1, i.updatedAt = :now
+             WHERE i.id = :id AND i.version = :expectedVersion
+            """)
+    int applyReceipt(
+            @Param("id") Long id,
+            @Param("expectedVersion") Long expectedVersion,
+            @Param("newQuantity") BigDecimal newQuantity,
+            @Param("newAverageUnitCost") BigDecimal newAverageUnitCost,
+            @Param("now") Instant now);
+
     @Query("""
             SELECT i FROM Inventory i, Product p
              WHERE i.productId = p.id

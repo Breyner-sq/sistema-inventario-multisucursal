@@ -252,6 +252,22 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** 422 `MOTIVO_INCOMPATIBLE_CON_DIRECCION`.
 - **Pruebas necesarias:** un ajuste `INGRESO` con `reason=MERMA` (u otro motivo de salida) se rechaza; un ajuste `INGRESO` con `reason=DEVOLUCION` se acepta; sin `reason`, el motivo por defecto corresponde a la dirección enviada.
 
+### BR-028 — El precio de recepción es distinto del precio pactado en la orden **[Decisión]**
+
+- **Descripción:** `PurchaseOrderItem.unit_price` (fijado al crear la orden) es la condición comercial pactada — inmutable, se usa para el `line_total` de la orden. El `unitPrice` que se envía en `POST /purchase-orders/{id}/receipts` (docs/openapi.yaml, `PurchaseReceiptRequest`) es el costo efectivamente recibido en esa recepción — puede diferir del pactado (cambios de precio entre orden y entrega, ajuste de factura) — y se usa exclusivamente para recalcular `Inventory.average_unit_cost` (BR-004). Ninguno sobrescribe al otro. Decisión tomada al implementar el módulo `purchases` para reconciliar una aparente tensión entre `docs/DOMAIN_MODEL.md` (sección 2.7, que sugiere que el costo histórico vive únicamente en `PurchaseOrderItem.unit_price`) y la firma explícita de `recibirCompra(..., precioUnitario, ...)` en `docs/CRITICAL_FLOWS.md` (flujo B) más el campo `unitPrice` del propio `PurchaseReceiptRequest` — se prioriza el pseudocódigo y el contrato ya aprobados, por ser más detallados y posteriores.
+- **Entidades afectadas:** `PurchaseOrderItem`, `Inventory`.
+- **Validación:** `PurchaseReceiptService.applyInventoryReceipt` usa el `unitPrice` de la solicitud de recepción, nunca el de `PurchaseOrderItem`, para la fórmula de costo promedio ponderado.
+- **Error esperado:** no aplica — es una decisión de diseño, no una regla rechazable.
+- **Pruebas necesarias:** recibir a un precio distinto del pactado en la orden actualiza `average_unit_cost` según el precio de recepción, sin alterar `PurchaseOrderItem.unit_price` ni su `lineTotal` original.
+
+### BR-029 — Clave de idempotencia derivada por línea en la recepción de compra **[Decisión]**
+
+- **Descripción:** `POST /purchase-orders/{id}/receipts` recibe un único encabezado `Idempotency-Key` por solicitud, pero puede traer varias líneas (`docs/openapi.yaml`, `PurchaseReceiptRequest.items[]`) y `InventoryMovement.idempotency_key` es única por movimiento (uno por línea). Se deriva una clave por línea como `<Idempotency-Key>:<purchaseOrderItemId>`. Esto permite reintentar la solicitud completa (cada línea ya aplicada se detecta y no se reaplica, devolviendo el resultado original) sin que el mismo header choque con otra recepción legítima que use una línea distinta de la misma orden.
+- **Entidades afectadas:** `InventoryMovement`.
+- **Validación:** `PurchaseReceiptService.receive` calcula la clave derivada por cada línea antes de comprobar `InventoryMovementRepository.findByIdempotencyKey`; esta comprobación ocurre **antes** que la de `PurchaseOrder.status` (BR-017/BR-023 generalizado a este flujo) — un reintento legítimo debe replicar su resultado incluso si la propia recepción original ya dejó la orden en `RECEIVED`.
+- **Error esperado:** no aplica un error propio — un reintento con la misma clave no es un error (BR-017).
+- **Pruebas necesarias:** reenviar la misma solicitud completa (mismo `Idempotency-Key`, mismas líneas) no duplica el incremento de stock ni el `quantity_received`; reenviar la misma clave después de que la orden ya quedó `RECEIVED` por ese mismo envío devuelve 200 con el resultado original, no 409; una clave distinta sí aplica una recepción legítima subsiguiente.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)
@@ -259,9 +275,9 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 1. ~~`Inventory.average_unit_cost`~~ — **resuelto:** aprobado y aplicado en `docs/DOMAIN_MODEL.md` (secciones 2.7, 3.2 y 6).
 2. **Política de redondeo del costo promedio ponderado (BR-004):** aún no definida (ya señalada como pendiente en `docs/DOMAIN_MODEL.md`/`docs/STATUS.md`); se requiere decidir precisión decimal antes de implementar el cálculo.
 3. ~~Mecanismo exacto de reintento de BR-022~~ — **resuelto:** definido en `docs/CRITICAL_FLOWS.md` (sección 1.2) como 3 intentos con backoff aleatorio corto.
-4. **`PurchaseOrderItem.version`** (entero, bloqueo optimista) — identificada en `docs/CRITICAL_FLOWS.md` (flujo B, sección 4.1): necesaria porque `quantity_received` es un agregado que puede incrementarse en varias recepciones parciales concurrentes sobre la misma línea.
-5. **`Sale.client_reference_id`** (texto, `UNIQUE`, nullable) — clave de idempotencia para la creación de ventas (`docs/CRITICAL_FLOWS.md`, flujo A y sección 4.2).
-6. **`InventoryMovement.idempotency_key`** (texto, `UNIQUE` cuando no nulo) — clave de idempotencia para recepción de compra (flujo B) y ajuste manual (flujo G, BR-023), operaciones de creación repetible sin un documento contenedor con su propia referencia de cliente (`docs/CRITICAL_FLOWS.md`, sección 4.3).
+4. ~~`PurchaseOrderItem.version`~~ — **resuelto:** aplicado al implementar el módulo `purchases` (migración V14). Bloqueo optimista manual (mismo patrón que `Inventory.version`, no `@Version` de JPA) sobre `quantity_received`, necesario porque es un agregado que puede incrementarse en varias recepciones parciales concurrentes sobre la misma línea (docs/CRITICAL_FLOWS.md, flujo B).
+5. **`Sale.client_reference_id`** (texto, `UNIQUE`, nullable) — clave de idempotencia para la creación de ventas (`docs/CRITICAL_FLOWS.md`, flujo A y sección 4.2). Sigue pendiente — fuera del alcance del módulo `purchases`.
+6. ~~`InventoryMovement.idempotency_key`~~ — **parcialmente resuelto:** aplicado al implementar el módulo `purchases` (migración V15) para la recepción de compra (flujo B) — clave derivada `<Idempotency-Key del header>:<purchaseOrderItemId>`, ver BR-029. **Sigue pendiente** para el ajuste manual de inventario (flujo G, BR-023): la fase de `inventory` implementó ese endpoint sin idempotencia real (documentado en `docs/STATUS.md` como limitación conocida de esa fase) y no se retrofactoriza aquí — no era parte del alcance pedido para `purchases`.
 
 ## Reglas ya señaladas como pendientes en documentos previos (no se resuelven aquí)
 

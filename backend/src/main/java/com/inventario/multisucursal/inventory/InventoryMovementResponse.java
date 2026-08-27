@@ -5,9 +5,11 @@ import java.time.Instant;
 
 /**
  * docs/API_DESIGN.md, sección 8: InventoryMovementDTO. {@code source} es
- * siempre {@code null} en esta fase — ningún movimiento de un ajuste manual
- * cuelga de un documento comercial (BR-023); los módulos `purchases`,
- * `sales` y `transfers` poblarán este campo cuando se implementen.
+ * {@code null} para un ajuste manual (BR-023, sin documento comercial);
+ * para una recepción de compra (módulo `purchases`) queda poblado con
+ * {@code type=PURCHASE_ORDER} y el id de la {@code PurchaseOrderItem} de
+ * origen. Los módulos `sales`/`transfers` completarán los tipos restantes
+ * cuando se implementen.
  */
 public record InventoryMovementResponse(
         String id,
@@ -23,6 +25,9 @@ public record InventoryMovementResponse(
         MovementSource source) {
 
     public static InventoryMovementResponse from(InventoryMovement movement) {
+        MovementSource source = movement.getPurchaseOrderItemId() != null
+                ? new MovementSource("PURCHASE_ORDER", String.valueOf(movement.getPurchaseOrderItemId()))
+                : null;
         return new InventoryMovementResponse(
                 String.valueOf(movement.getId()),
                 String.valueOf(movement.getProductId()),
@@ -34,7 +39,7 @@ public record InventoryMovementResponse(
                 String.valueOf(movement.getResponsibleUserId()),
                 movement.getOccurredAt(),
                 movement.getNotes(),
-                null);
+                source);
     }
 
     public record MovementSource(String type, String id) {
