@@ -159,3 +159,144 @@ export interface InventoryAdjustmentRequest {
   quantity: number;
   notes: string;
 }
+
+// ---- Proveedores (docs/API_DESIGN.md, sección 7.6) ----
+
+export interface Supplier {
+  id: string;
+  name: string;
+  taxId: string;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  active: boolean;
+}
+
+export interface CreateSupplierRequest {
+  name: string;
+  taxId: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+export interface UpdateSupplierRequest {
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+}
+
+// ---- Compras (docs/API_DESIGN.md, sección 7.7) ----
+
+export type PurchaseOrderStatus = "CREATED" | "PARTIALLY_RECEIVED" | "RECEIVED" | "CANCELLED";
+
+export interface PurchaseOrderItem {
+  id: string;
+  productId: string;
+  unitOfMeasureId: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  pending: number;
+  unitPrice: number;
+  discountPercentage: number;
+  lineTotal: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  orderNumber: string;
+  supplierId: string;
+  branchId: string;
+  status: PurchaseOrderStatus;
+  orderDate: string;
+  paymentTerm: string | null;
+  items: PurchaseOrderItem[];
+}
+
+export interface CreatePurchaseOrderItemRequest {
+  productId: number;
+  unitOfMeasureId?: number | null;
+  quantityOrdered: number;
+  unitPrice: number;
+  discountPercentage?: number | null;
+}
+
+export interface CreatePurchaseOrderRequest {
+  supplierId: number;
+  branchId: number;
+  paymentTerm?: string | null;
+  items: CreatePurchaseOrderItemRequest[];
+}
+
+export interface ReceiptItemRequest {
+  purchaseOrderItemId: number;
+  quantityReceived: number;
+  unitPrice: number;
+}
+
+export interface PurchaseReceiptRequest {
+  items: ReceiptItemRequest[];
+}
+
+export interface PurchaseReceiptResponse {
+  purchaseOrderId: string;
+  status: PurchaseOrderStatus;
+  items: Array<{ purchaseOrderItemId: string; quantityOrdered: number; quantityReceived: number; pending: number }>;
+  inventoryUpdates: Array<{ productId: string; branchId: string; quantityOnHand: number; averageUnitCost: number }>;
+}
+
+// ---- Ventas / listas de precios (docs/API_DESIGN.md, sección 7.8) ----
+
+export type SaleStatus = "CONFIRMED";
+
+export interface SaleItem {
+  productId: string;
+  quantity: number;
+  unitOfMeasureId: string;
+  unitPrice: number;
+  discountPercentage: number;
+  lineTotal: number;
+}
+
+export interface Sale {
+  id: string;
+  saleNumber: string;
+  branchId: string;
+  soldByUserId: string;
+  status: SaleStatus;
+  saleDate: string;
+  items: SaleItem[];
+  subtotal: number;
+  discountTotal: number;
+  total: number;
+}
+
+export interface CreateSaleItemRequest {
+  productId: number;
+  unitOfMeasureId?: number | null;
+  quantity: number;
+  discountPercentage?: number | null;
+}
+
+export interface CreateSaleRequest {
+  branchId: number;
+  priceListId?: number | null;
+  items: CreateSaleItemRequest[];
+}
+
+export interface PriceList {
+  id: string;
+  name: string;
+  branchId: string | null;
+  active: boolean;
+}
+
+export interface Price {
+  id: string;
+  priceListId: string;
+  productId: string;
+  unitPrice: number;
+  validFrom: string;
+  validTo: string | null;
+}

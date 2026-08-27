@@ -74,3 +74,12 @@ th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--borde
 .form__error { color: var(--danger); margin: 1rem 0; }
 .form__error p { margin: 0.25rem 0; }
 .panel { border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.5rem; margin-top: 2rem; background: #fff; }
+
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin: 1rem 0 1.5rem; }
+.detail-grid dt { font-size: 0.8rem; color: var(--muted); margin: 0; }
+.detail-grid dd { margin: 0; font-size: 1rem; }
+
+.receipt-inputs { display: flex; gap: 0.5rem; }
+.receipt-inputs input { width: 6rem; padding: 0.35rem; border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+
+.sale-total { margin: 1rem 0; font-size: 1.1rem; }

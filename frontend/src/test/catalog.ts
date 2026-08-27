@@ -1,5 +1,16 @@
 import { jsonResponse } from "./harness";
-import type { InventoryMovement, InventoryRow, Product, ProductUnit, UnitOfMeasure } from "../types/api";
+import type {
+  InventoryMovement,
+  InventoryRow,
+  Price,
+  PriceList,
+  Product,
+  ProductUnit,
+  PurchaseOrder,
+  Sale,
+  Supplier,
+  UnitOfMeasure,
+} from "../types/api";
 
 /** Datos de catálogo compartidos por las pruebas de productos e inventario. */
 
@@ -53,6 +64,63 @@ export function movement(overrides: Partial<InventoryMovement> = {}): InventoryM
   };
 }
 
+export const SUPPLIERS: Supplier[] = [
+  { id: "1", name: "Distribuidora Andina", taxId: "TAX-001", contactName: "Ana Ríos", phone: null, email: null, active: true },
+];
+
+export const PRICE_LISTS: PriceList[] = [
+  { id: "1", name: "Lista Centro", branchId: "1", active: true },
+  { id: "2", name: "Lista General", branchId: null, active: true },
+];
+
+export const PRICES: Price[] = [
+  { id: "1", priceListId: "1", productId: "10", unitPrice: 50, validFrom: "2026-08-01T00:00:00Z", validTo: null },
+];
+
+export function purchaseOrder(overrides: Partial<PurchaseOrder> = {}): PurchaseOrder {
+  return {
+    id: "500",
+    orderNumber: "OC-ABC12345",
+    supplierId: "1",
+    branchId: "1",
+    status: "CREATED",
+    orderDate: "2026-08-27T10:00:00Z",
+    paymentTerm: "30 días",
+    items: [
+      {
+        id: "5000",
+        productId: "10",
+        unitOfMeasureId: "1",
+        quantityOrdered: 20,
+        quantityReceived: 0,
+        pending: 20,
+        unitPrice: 15.5,
+        discountPercentage: 0,
+        lineTotal: 310,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function sale(overrides: Partial<Sale> = {}): Sale {
+  return {
+    id: "700",
+    saleNumber: "V-ABC12345",
+    branchId: "1",
+    soldByUserId: "1",
+    status: "CONFIRMED",
+    saleDate: "2026-08-27T10:00:00Z",
+    items: [
+      { productId: "10", quantity: 3, unitOfMeasureId: "1", unitPrice: 50, discountPercentage: 0, lineTotal: 150 },
+    ],
+    subtotal: 150,
+    discountTotal: 0,
+    total: 150,
+    ...overrides,
+  };
+}
+
 export function page<T>(content: T[], overrides: Partial<{ page: number; size: number; totalPages: number }> = {}) {
   return {
     content,
@@ -73,5 +141,8 @@ export function catalogResponse(url: string): Response | undefined {
   if (url.includes("/branches")) return jsonResponse(200, page(BRANCHES));
   if (url.includes("/units-of-measure")) return jsonResponse(200, UNITS);
   if (/\/products\/\d+\/units/.test(url)) return jsonResponse(200, PRODUCT_UNITS);
+  if (url.includes("/suppliers")) return jsonResponse(200, page(SUPPLIERS));
+  if (/\/price-lists\/\d+\/prices/.test(url)) return jsonResponse(200, PRICES);
+  if (url.includes("/price-lists")) return jsonResponse(200, page(PRICE_LISTS));
   return undefined;
 }

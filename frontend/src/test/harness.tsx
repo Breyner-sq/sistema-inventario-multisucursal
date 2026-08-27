@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import type { RenderResult } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 import App from "../App";
 import { AuthProvider } from "../auth/AuthContext";
 import type { LoginResponse, Role, UserSummary } from "../types/api";
@@ -66,4 +67,17 @@ export function mockFetch(handler: (url: string, init?: RequestInit) => Response
   const spy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(handler(String(input), init)));
   vi.stubGlobal("fetch", spy);
   return spy;
+}
+
+/**
+ * Selecciona una opción en un `<select>` de producto que se llena de forma
+ * asíncrona (la consulta al catálogo aún no resolvió cuando aparece el
+ * elemento). Esperar la opción, no solo el `<select>`, evita una carrera
+ * donde `selectOptions` fallaría con "Value not found in options".
+ */
+export async function selectOption(labelRegex: RegExp, optionValue: string) {
+  const select = await screen.findByLabelText(labelRegex);
+  await waitFor(() => expect(within(select).getByRole("option", { name: (_, el) => el.getAttribute("value") === optionValue })).toBeInTheDocument());
+  await userEvent.selectOptions(select, optionValue);
+  return select;
 }

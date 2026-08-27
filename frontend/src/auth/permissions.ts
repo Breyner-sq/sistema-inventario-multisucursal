@@ -26,6 +26,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", path: "/" },
   { label: "Inventario", path: "/inventario" },
   { label: "Productos", path: "/productos" },
+  { label: "Compras", path: "/compras" },
+  { label: "Ventas", path: "/ventas" },
   { label: "Transferencias", path: "/transferencias" },
   { label: "Sucursales", path: "/sucursales" },
   { label: "Usuarios", path: "/usuarios", roles: ["ADMIN"] },
@@ -67,3 +69,13 @@ export function canWriteInBranch(user: { role: Role; branchId: string | null } |
   if (user.role === "ADMIN") return true;
   return user.branchId === branchId;
 }
+
+export const canPurchases = {
+  /** Crear orden, cancelarla y registrar recepción. */
+  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+};
+
+export const canSales = {
+  /** Registrar una venta. */
+  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+};

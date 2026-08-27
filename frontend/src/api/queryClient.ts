@@ -45,6 +45,13 @@ export const queryKeys = {
   productUnits: (productId: string) => ["product-units", productId] as const,
   unitsOfMeasure: () => ["units-of-measure"] as const,
   inventoryMovements: (params?: unknown) => ["inventory-movements", params ?? {}] as const,
+  suppliers: (params?: unknown) => ["suppliers", params ?? {}] as const,
+  purchaseOrders: (params?: unknown) => ["purchase-orders", params ?? {}] as const,
+  purchaseOrder: (id: string) => ["purchase-orders", id] as const,
+  sales: (params?: unknown) => ["sales", params ?? {}] as const,
+  sale: (id: string) => ["sales", id] as const,
+  priceLists: (params?: unknown) => ["price-lists", params ?? {}] as const,
+  prices: (priceListId: string) => ["price-lists", priceListId, "prices"] as const,
   inventory: (params?: unknown) => ["inventory", params ?? {}] as const,
   transfers: (params?: unknown) => ["transfers", params ?? {}] as const,
 };
@@ -58,4 +65,6 @@ export const queryPrefixes = {
   products: ["products"] as const,
   inventory: ["inventory"] as const,
   inventoryMovements: ["inventory-movements"] as const,
+  purchaseOrders: ["purchase-orders"] as const,
+  sales: ["sales"] as const,
 };
