@@ -67,6 +67,12 @@ public class InventoryMovement {
     @Column(name = "purchase_order_item_id")
     private Long purchaseOrderItemId;
 
+    @Column(name = "sale_item_id")
+    private Long saleItemId;
+
+    @Column(name = "transfer_item_id")
+    private Long transferItemId;
+
     protected InventoryMovement() {
         // JPA
     }
@@ -112,6 +118,56 @@ public class InventoryMovement {
         this(productId, branchId, direction, reason, quantity, unitOfMeasureId, responsibleUserId, notes);
         this.purchaseOrderItemId = purchaseOrderItemId;
         this.idempotencyKey = idempotencyKey;
+    }
+
+    /**
+     * Constructor para movimientos de venta (flujo A; RF-017 a RF-021), con
+     * la FK documental hacia {@code SaleItem}. Sin clave de idempotencia
+     * propia: la idempotencia de una venta se resuelve una sola vez, a nivel
+     * de {@code Sale.client_reference_id}, antes de generar ningún
+     * movimiento — no hace falta una clave derivada por línea como en la
+     * recepción de compra (docs/BUSINESS_RULES.md, BR-029).
+     */
+    public InventoryMovement(
+            Long productId,
+            Long branchId,
+            MovementDirection direction,
+            MovementReason reason,
+            BigDecimal quantity,
+            Long unitOfMeasureId,
+            Long responsibleUserId,
+            String notes,
+            Long saleItemId) {
+        this(productId, branchId, direction, reason, quantity, unitOfMeasureId, responsibleUserId, notes);
+        this.saleItemId = saleItemId;
+    }
+
+    /**
+     * Movimiento generado por una transferencia (flujos D/E/F): el
+     * {@code RETIRO}/{@code TRANSFERENCIA_SALIDA} en la sucursal origen al
+     * despachar, y el {@code INGRESO}/{@code TRANSFERENCIA_ENTRADA} en la
+     * destino al recibir — ambos enlazados a la misma {@code TransferItem}.
+     *
+     * <p>Se expone como método de fábrica y no como un constructor más
+     * porque tendría exactamente la misma firma que el constructor de venta
+     * ({@code ..., Long saleItemId}): dos {@code Long} finales no se
+     * distinguen entre sí, y un constructor ambiguo invita a pasar el id
+     * equivocado sin que el compilador avise.
+     */
+    public static InventoryMovement forTransfer(
+            Long productId,
+            Long branchId,
+            MovementDirection direction,
+            MovementReason reason,
+            BigDecimal quantity,
+            Long unitOfMeasureId,
+            Long responsibleUserId,
+            String notes,
+            Long transferItemId) {
+        InventoryMovement movement = new InventoryMovement(
+                productId, branchId, direction, reason, quantity, unitOfMeasureId, responsibleUserId, notes);
+        movement.transferItemId = transferItemId;
+        return movement;
     }
 
     public Long getId() {
@@ -164,5 +220,13 @@ public class InventoryMovement {
 
     public Long getPurchaseOrderItemId() {
         return purchaseOrderItemId;
+    }
+
+    public Long getSaleItemId() {
+        return saleItemId;
+    }
+
+    public Long getTransferItemId() {
+        return transferItemId;
     }
 }

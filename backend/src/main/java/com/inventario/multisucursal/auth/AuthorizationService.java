@@ -31,6 +31,32 @@ public class AuthorizationService {
                 "El usuario no pertenece a la sucursal solicitada.");
     }
 
+    /**
+     * Acceso cuando un recurso involucra a más de una sucursal y basta con
+     * pertenecer a cualquiera de ellas — el caso de {@code Transfer}, visible
+     * tanto desde su origen como desde su destino (docs/API_DESIGN.md,
+     * sección 6). {@code ADMIN} conserva su alcance global.
+     */
+    public boolean requireAnyBranchAccess(Long... branchIds) {
+        AuthenticatedUser user = currentUser();
+        if (user.role() == RoleCode.ADMIN) {
+            return true;
+        }
+        for (Long branchId : branchIds) {
+            if (branchId != null && branchId.equals(user.branchId())) {
+                return true;
+            }
+        }
+        throw new BranchAccessDeniedException(
+                "El usuario no pertenece a ninguna de las sucursales involucradas.");
+    }
+
+    /** La sucursal del usuario autenticado, o {@code null} si es {@code ADMIN} (alcance global). */
+    public Long currentBranchScopeOrNull() {
+        AuthenticatedUser user = currentUser();
+        return user.role() == RoleCode.ADMIN ? null : user.branchId();
+    }
+
     private AuthenticatedUser currentUser() {
         return (AuthenticatedUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }

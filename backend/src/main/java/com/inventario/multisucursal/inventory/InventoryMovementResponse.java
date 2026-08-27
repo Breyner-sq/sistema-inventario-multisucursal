@@ -6,10 +6,11 @@ import java.time.Instant;
 /**
  * docs/API_DESIGN.md, sección 8: InventoryMovementDTO. {@code source} es
  * {@code null} para un ajuste manual (BR-023, sin documento comercial);
- * para una recepción de compra (módulo `purchases`) queda poblado con
- * {@code type=PURCHASE_ORDER} y el id de la {@code PurchaseOrderItem} de
- * origen. Los módulos `sales`/`transfers` completarán los tipos restantes
- * cuando se implementen.
+ * para una recepción de compra queda poblado con {@code type=PURCHASE_ORDER}
+ * y el id de la {@code PurchaseOrderItem} de origen; para una venta,
+ * {@code type=SALE} y el id de la {@code SaleItem}; para una transferencia,
+ * {@code type=TRANSFER} y el id de la {@code TransferItem} (la misma línea
+ * aparece en dos movimientos: la salida del origen y la entrada al destino).
  */
 public record InventoryMovementResponse(
         String id,
@@ -25,9 +26,16 @@ public record InventoryMovementResponse(
         MovementSource source) {
 
     public static InventoryMovementResponse from(InventoryMovement movement) {
-        MovementSource source = movement.getPurchaseOrderItemId() != null
-                ? new MovementSource("PURCHASE_ORDER", String.valueOf(movement.getPurchaseOrderItemId()))
-                : null;
+        MovementSource source;
+        if (movement.getPurchaseOrderItemId() != null) {
+            source = new MovementSource("PURCHASE_ORDER", String.valueOf(movement.getPurchaseOrderItemId()));
+        } else if (movement.getSaleItemId() != null) {
+            source = new MovementSource("SALE", String.valueOf(movement.getSaleItemId()));
+        } else if (movement.getTransferItemId() != null) {
+            source = new MovementSource("TRANSFER", String.valueOf(movement.getTransferItemId()));
+        } else {
+            source = null;
+        }
         return new InventoryMovementResponse(
                 String.valueOf(movement.getId()),
                 String.valueOf(movement.getProductId()),

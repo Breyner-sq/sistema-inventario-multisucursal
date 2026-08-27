@@ -268,6 +268,54 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** no aplica un error propio — un reintento con la misma clave no es un error (BR-017).
 - **Pruebas necesarias:** reenviar la misma solicitud completa (mismo `Idempotency-Key`, mismas líneas) no duplica el incremento de stock ni el `quantity_received`; reenviar la misma clave después de que la orden ya quedó `RECEIVED` por ese mismo envío devuelve 200 con el resultado original, no 409; una clave distinta sí aplica una recepción legítima subsiguiente.
 
+### BR-030 — Resolución de la lista de precios cuando la venta no especifica una **[Decisión]**
+
+- **Descripción:** `POST /sales` acepta `priceListId` opcional (docs/openapi.yaml, `SaleCreateRequest`). Si se omite, se resuelve: primero una `PriceList` activa propia de la sucursal (`branch_id` = sucursal de la venta); si no existe, la lista global activa (`branch_id IS NULL`). Ningún documento aprobado detalla este algoritmo de resolución — es la interpretación más directa de "`branch_id` nulo = lista global" (docs/DOMAIN_MODEL.md, sección 2.13), priorizando lo específico de la sucursal sobre lo global.
+- **Entidades afectadas:** `PriceList`, `Sale`.
+- **Validación:** `SaleService.resolvePriceList` — si se especifica `priceListId`, se usa directamente (validando que exista y esté activa); si no, aplica el orden de prioridad descrito.
+- **Error esperado:** 404 `LISTA_PRECIOS_NO_ENCONTRADA` si se especifica un id inexistente; 409 `LISTA_PRECIOS_INACTIVA` si existe pero está inactiva; 422 `LISTA_PRECIOS_NO_ENCONTRADA` si no se especifica ninguna y no hay lista activa aplicable (ni de sucursal ni global) — 422 en vez de 404 porque no falta un recurso referenciado por id, sino que el estado de las listas de precios existentes no permite completar la operación.
+- **Pruebas necesarias:** venta sin `priceListId` con una lista de sucursal activa usa esa lista; sin lista de sucursal, cae a la global; sin ninguna lista activa, se rechaza.
+
+### BR-031 — El estado `VOIDED` de una venta no se implementa todavía **[Origen: docs/DOMAIN_MODEL.md, decisión de aprobación 9, sin resolver]**
+
+- **Descripción:** `docs/DOMAIN_MODEL.md` lista `Sale.status` como `CONFIRMED`/`VOIDED`, pero deja explícitamente pendiente de aprobación si la anulación de ventas se modela como ese estado o como un ajuste de inventario aparte. Al implementar el módulo `sales`, `SaleStatus` (Java) solo define `CONFIRMED` — no se presenta como resuelta una decisión que sigue abierta. `POST /sales/{id}/void` no se implementa (docs/API_DESIGN.md, sección 7.8, ya lo marca condicionado a esa aprobación).
+- **Entidades afectadas:** `Sale`.
+- **Validación:** no aplica — es una omisión deliberada, no una regla que el sistema imponga en tiempo de ejecución.
+- **Error esperado:** no aplica.
+- **Pruebas necesarias:** ninguna prueba de la suite depende de `VOIDED` ni de un endpoint de anulación.
+
+### BR-032 — Clave de idempotencia de la solicitud de transferencia **[Decisión]**
+
+- **Descripción:** la solicitud de transferencia (flujo C1) es una operación de creación repetible (categoría 2, `docs/CRITICAL_FLOWS.md` sección 1.1), por lo que necesita una clave de idempotencia — pero `docs/DOMAIN_MODEL.md` (sección 2.18) no listaba ninguna columna para ella. Se agrega `Transfer.client_reference_id` (texto, `UNIQUE`, nullable), exactamente el mismo patrón ya aprobado y aplicado en `Sale.client_reference_id` (decisión pendiente #5, resuelta en la fase de `sales`). Nulo para las transferencias que el propio sistema genera —las de reenvío del flujo F2—, que no provienen de una solicitud HTTP susceptible de doble clic.
+- **Entidades afectadas:** `Transfer`.
+- **Validación:** `TransferService.request` consulta la clave antes de crear nada; si ya existe, devuelve la transferencia original sin crear una segunda.
+- **Error esperado:** 400 `IDEMPOTENCY_KEY_REQUERIDO` si falta el encabezado; un reintento con la misma clave **no** es un error (BR-017).
+- **Pruebas necesarias:** doble envío con la misma clave no crea dos solicitudes; sin encabezado se rechaza.
+
+### BR-033 — La cantidad aprobada no puede exceder la solicitada **[Decisión]**
+
+- **Descripción:** al aprobar (flujo C2) la sucursal origen puede **ajustar la cantidad hacia abajo** (BR-005 lo contempla explícitamente: "aprobarla con una cantidad ajustada menor"), pero nunca hacia arriba — aprobar más de lo que el destino pidió no es un ajuste, es una transferencia distinta. Ni `docs/DOMAIN_MODEL.md` ni BR-005 lo decían de forma explícita; se formaliza aquí.
+- **Entidades afectadas:** `TransferItem`.
+- **Validación:** `TransferService.approve` compara contra `quantity_requested`, reforzado por `CHECK (quantity_approved IS NULL OR (quantity_approved > 0 AND quantity_approved <= quantity_requested))`. La cadena completa queda acotada en base de datos: `received ≤ shipped ≤ approved ≤ requested`.
+- **Error esperado:** 422 `CANTIDAD_APROBADA_EXCEDE_SOLICITADO`.
+- **Pruebas necesarias:** aprobar más de lo solicitado se rechaza; aprobar una cantidad menor se acepta y es la que limita el despacho.
+
+### BR-034 — Aprobación y despacho cubren todas las líneas; la recepción admite subconjuntos **[Decisión]**
+
+- **Descripción:** una transferencia tiene un **único tramo de envío** (`docs/DOMAIN_MODEL.md` 2.17; `docs/API_DESIGN.md` 7.9), así que el despacho no es parcial por línea: la solicitud debe incluir todas. Lo mismo se aplica a la aprobación, por una razón derivada: una línea sin `quantity_approved` no podría despacharse nunca (el despacho exige `shipped ≤ approved`), dejando la transferencia en un callejón sin salida. La **recepción**, en cambio, sí admite un subconjunto de líneas por llamada — el conteo físico puede hacerse línea por línea en momentos distintos (escenario 3.5), y el estado de la transferencia solo avanza cuando todas quedan atendidas.
+- **Entidades afectadas:** `Transfer`, `TransferItem`.
+- **Validación:** `TransferService.approve`/`dispatch` comparan el conjunto de líneas recibido contra el de la transferencia; `receive` no lo hace y recalcula el estado al final.
+- **Error esperado:** 422 `APROBACION_INCOMPLETA`; 422 `DESPACHO_INCOMPLETO`; 404 `LINEA_TRANSFERENCIA_NO_ENCONTRADA` si se referencia una línea de otra transferencia; 422 `LINEA_DUPLICADA_EN_SOLICITUD` si la misma línea aparece dos veces.
+- **Pruebas necesarias:** aprobar o despachar omitiendo una línea de una transferencia de dos se rechaza; recibir una sola línea de dos deja la transferencia en tránsito y la segunda recepción la cierra.
+
+### BR-035 — Faltante nulo en recepción completa; recepción en cero no genera movimiento **[Decisión]**
+
+- **Descripción:** resuelve la ambigüedad que BR-008 dejaba abierta ("`quantity_missing` en `NULL` o `0`, no ambiguo"): se persiste **`NULL` cuando la recepción fue completa** y la diferencia solo cuando realmente falta algo, tal como muestra el ejemplo 9.6 de `docs/API_DESIGN.md`. Así, "tiene faltante" es exactamente `quantity_missing IS NOT NULL`. Complemento: una línea recibida en **cero** (no llegó nada) es una recepción parcial válida (flujo F1) pero **no genera `InventoryMovement`** — un movimiento de cantidad cero violaría `CHECK (quantity > 0)` y no representa ningún hecho de stock.
+- **Entidades afectadas:** `TransferItem`, `InventoryMovement`, `Inventory`.
+- **Validación:** `TransferService.receive` guarda `null` si `received == shipped`, y solo toca inventario/ledger si `received > 0`.
+- **Error esperado:** no aplica — ambos son caminos válidos, no rechazos.
+- **Pruebas necesarias:** recepción completa deja `quantityMissing` nulo; recepción de 0 de N deja `quantityMissing = N`, sin fila de inventario ni movimiento en el destino.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)
@@ -276,12 +324,14 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 2. **Política de redondeo del costo promedio ponderado (BR-004):** aún no definida (ya señalada como pendiente en `docs/DOMAIN_MODEL.md`/`docs/STATUS.md`); se requiere decidir precisión decimal antes de implementar el cálculo.
 3. ~~Mecanismo exacto de reintento de BR-022~~ — **resuelto:** definido en `docs/CRITICAL_FLOWS.md` (sección 1.2) como 3 intentos con backoff aleatorio corto.
 4. ~~`PurchaseOrderItem.version`~~ — **resuelto:** aplicado al implementar el módulo `purchases` (migración V14). Bloqueo optimista manual (mismo patrón que `Inventory.version`, no `@Version` de JPA) sobre `quantity_received`, necesario porque es un agregado que puede incrementarse en varias recepciones parciales concurrentes sobre la misma línea (docs/CRITICAL_FLOWS.md, flujo B).
-5. **`Sale.client_reference_id`** (texto, `UNIQUE`, nullable) — clave de idempotencia para la creación de ventas (`docs/CRITICAL_FLOWS.md`, flujo A y sección 4.2). Sigue pendiente — fuera del alcance del módulo `purchases`.
+5. ~~`Sale.client_reference_id`~~ — **resuelto:** aplicado al implementar el módulo `sales` (migración V18). A diferencia de `InventoryMovement.idempotency_key` en la recepción de compra (BR-029, derivada por línea), aquí una sola clave por sucursal/solicitud basta: la venta completa (cabecera + todas sus líneas) se verifica de una sola vez, antes de procesar ninguna línea (docs/CRITICAL_FLOWS.md, flujo A).
 6. ~~`InventoryMovement.idempotency_key`~~ — **parcialmente resuelto:** aplicado al implementar el módulo `purchases` (migración V15) para la recepción de compra (flujo B) — clave derivada `<Idempotency-Key del header>:<purchaseOrderItemId>`, ver BR-029. **Sigue pendiente** para el ajuste manual de inventario (flujo G, BR-023): la fase de `inventory` implementó ese endpoint sin idempotencia real (documentado en `docs/STATUS.md` como limitación conocida de esa fase) y no se retrofactoriza aquí — no era parte del alcance pedido para `purchases`.
+
+7. **`Transfer.route_id`** (`docs/DOMAIN_MODEL.md` 2.18) — **no aplicado todavía:** la entidad `Route` pertenece al módulo `logistics`, explícitamente fuera del alcance de la fase de `transfers`. La columna y su FK se agregarán junto con esa tabla, igual que `sale_item_id`/`transfer_item_id` se agregaron a `inventory_movement` al implementar cada módulo que los originaba.
 
 ## Reglas ya señaladas como pendientes en documentos previos (no se resuelven aquí)
 
-- Rol exacto que aprueba una transferencia y que decide el tratamiento del faltante (BR-005, BR-009): sigue como supuesto pendiente de confirmación (`docs/PROJECT_BRIEF.md`, `docs/USE_CASES.md`, `docs/DOMAIN_MODEL.md`).
+- Rol exacto que aprueba una transferencia y que decide el tratamiento del faltante (BR-005, BR-009): sigue como supuesto pendiente de confirmación (`docs/PROJECT_BRIEF.md`, `docs/USE_CASES.md`, `docs/DOMAIN_MODEL.md`). La implementación de `transfers` aplicó el supuesto ya registrado —aprobar/rechazar es del **Gerente de la sucursal origen**; el tratamiento del faltante, de un **Gerente de origen o destino**— sin darlo por confirmado.
 - Si `Sale` admite anulación (`VOIDED`) o toda corrección se maneja como ajuste aparte (`docs/DOMAIN_MODEL.md`, decisión de aprobación 9) — afecta si BR-021 debe contemplar una excepción explícita para ese estado.
 
 ---
