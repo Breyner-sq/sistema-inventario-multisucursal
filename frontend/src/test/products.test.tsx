@@ -100,6 +100,7 @@ describe("Pantalla de productos", () => {
       expect(await screen.findByText(/el sku es obligatorio/i)).toBeInTheDocument();
       expect(screen.getByText(/el nombre es obligatorio/i)).toBeInTheDocument();
       expect(screen.getByText(/selecciona la unidad base/i)).toBeInTheDocument();
+      expect(screen.getByText(/indica el stock mínimo/i)).toBeInTheDocument();
       expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
     });
 
@@ -125,6 +126,7 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^sku$/i), "SKU-003");
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Grava");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
+      await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       const post = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
@@ -133,6 +135,7 @@ describe("Pantalla de productos", () => {
         sku: "SKU-003",
         name: "Grava",
         baseUnitOfMeasureId: 1,
+        minimumStock: 5,
       });
       // Revalidación tras la mutación: el nuevo producto aparece sin recargar.
       expect(await screen.findByText("SKU-003")).toBeInTheDocument();
@@ -154,6 +157,7 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^sku$/i), "SKU-001");
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Cemento");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
+      await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       expect(await screen.findByText(/ya existe un producto con el sku sku-001/i)).toBeInTheDocument();
@@ -183,6 +187,7 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^sku$/i), "SKU-009");
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Nombre larguísimo");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
+      await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       expect(await screen.findByText(/no debe exceder 150 caracteres/i)).toBeInTheDocument();

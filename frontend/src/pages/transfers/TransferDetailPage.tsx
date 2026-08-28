@@ -165,6 +165,7 @@ function TransferDetailView({ id }: { id: string }) {
                                 (<Link to={`/transferencias/${item.followUpTransferId}`}>ver reposición</Link>)
                               </>
                             ) : null}
+                            {item.treatmentNotes ? <p className="state__hint">{item.treatmentNotes}</p> : null}
                           </>
                         ) : item.quantityMissing ? (
                           "Sin tratar"

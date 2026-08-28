@@ -120,15 +120,15 @@ Convención de la tabla: **rol** con acceso; "propia sucursal" significa que el 
 | `inventory/adjustments` | — | `OPERATOR` (propia sucursal) + `ADMIN` |
 | `stock-alerts` | cualquier rol autenticado | — (generación automática) |
 | `suppliers` | cualquier rol autenticado | `OPERATOR` + `ADMIN` |
-| `purchase-orders`, `.../receipts` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` (cualquiera) | `OPERATOR` (propia sucursal) + `ADMIN` |
+| `purchase-orders`, `.../receipts` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` (cualquiera) | `OPERATOR`/`MANAGER` (propia sucursal) + `ADMIN` — `MANAGER` ampliado a las mismas capacidades que `ADMIN`/`OPERATOR` (crear, cancelar, recibir) por decisión explícita registrada en BR-047 |
 | `sales` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` | `OPERATOR` (propia sucursal) + `ADMIN` |
 | `sales/{id}/void` | — | `MANAGER` (propia sucursal) + `ADMIN` **[Supuesto: anulación requiere un rol de supervisión, no el mismo Operador que la creó — condicionado a que `docs/DOMAIN_MODEL.md` decisión 9 apruebe el estado `VOIDED`]** |
 | `price-lists`, `prices` | cualquier rol autenticado | `ADMIN` **[Supuesto: fijación de precios es administrativa]** |
 | `transfers` (lectura) | cualquier rol de las sucursales origen/destino, `ADMIN` cualquiera | — |
 | `transfers` (crear solicitud) | — | `OPERATOR`/`MANAGER`/`ADMIN` (RF-022) |
 | `transfers/{id}/approve`, `/reject` | — | `MANAGER` (sucursal origen) + `ADMIN` — supuesto pendiente ya señalado en `docs/USE_CASES.md`/`docs/DOMAIN_MODEL.md` |
-| `transfers/{id}/dispatch` | — | `OPERATOR` (sucursal origen) + `ADMIN` |
-| `transfers/{id}/receive` | — | `OPERATOR` (sucursal destino) + `ADMIN` |
+| `transfers/{id}/dispatch` | — | `OPERATOR`/`MANAGER` (sucursal origen) + `ADMIN` — `MANAGER` ampliado por decisión BR-047 |
+| `transfers/{id}/receive` | — | `OPERATOR`/`MANAGER` (sucursal destino) + `ADMIN` — `MANAGER` ampliado por decisión BR-047 |
 | `transfers/{id}/items/{itemId}/discrepancy-treatment` | — | `MANAGER` + `ADMIN` — mismo supuesto pendiente |
 | `routes` | cualquier rol autenticado | `MANAGER` + `ADMIN` |
 | `dashboard/*` | propia sucursal, todos los roles | — |

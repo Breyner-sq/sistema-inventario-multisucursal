@@ -355,7 +355,7 @@ class LogisticsComplianceApiTest {
 
     private String createProduct(String sku) {
         return restTemplate.exchange("/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId()),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0),
                         authHeaders(originOperatorToken)),
                 ProductResponse.class).getBody().id();
     }

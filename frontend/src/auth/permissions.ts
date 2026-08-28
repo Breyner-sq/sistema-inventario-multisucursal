@@ -89,8 +89,8 @@ export const canBranches = {
 };
 
 export const canPurchases = {
-  /** Crear orden, cancelarla y registrar recepción. */
-  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+  /** Crear orden, cancelarla y registrar recepción — MANAGER incluido, mismas capacidades que ADMIN. */
+  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
 };
 
 export const canSales = {
@@ -108,10 +108,10 @@ export const canTransfers = {
   request: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
   /** Aprobar/rechazar: Gerente de la sucursal origen. */
   approve: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
-  /** Despachar: Operador de la sucursal origen. */
-  dispatch: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
-  /** Recibir: Operador de la sucursal destino. */
-  receive: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+  /** Despachar: Operador o Gerente de la sucursal origen. */
+  dispatch: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
+  /** Recibir: Operador o Gerente de la sucursal destino. */
+  receive: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
   /** Tratar un faltante: Gerente de origen o destino. */
   treatDiscrepancy: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
 };

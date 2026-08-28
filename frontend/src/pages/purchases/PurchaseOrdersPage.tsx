@@ -10,11 +10,15 @@ import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Pagination } from "../../components/ui/Pagination";
 import type { PurchaseOrder, PurchaseOrderStatus } from "../../types/api";
+import { productLabel, useProductIndex } from "../products/useCatalog";
 import { useActiveSuppliers } from "./useSuppliers";
 import { PURCHASE_STATUS_LABELS, orderTotal } from "./statusLabels";
 
 const PAGE_SIZE = 10;
 const STATUSES: PurchaseOrderStatus[] = ["CREATED", "PARTIALLY_RECEIVED", "RECEIVED", "CANCELLED"];
+
+type SortColumn = "supplier" | "product";
+type SortDirection = "asc" | "desc";
 
 /**
  * Listado de órdenes de compra. El filtro de sucursal solo tiene sentido
@@ -32,6 +36,7 @@ export function PurchaseOrdersPage() {
   const [status, setStatus] = useState<PurchaseOrderStatus | "">("");
   const [page, setPage] = useState(0);
   const [cancelling, setCancelling] = useState<PurchaseOrder | undefined>();
+  const [sort, setSort] = useState<{ column: SortColumn; direction: SortDirection } | null>(null);
 
   const branchesQuery = useQuery({
     queryKey: queryKeys.branches({ active: true }),
@@ -40,6 +45,23 @@ export function PurchaseOrdersPage() {
   const branchesById = new Map((branchesQuery.data?.content ?? []).map((branch) => [branch.id, branch]));
 
   const { byId: suppliersById, suppliers } = useActiveSuppliers();
+  const { byId: productsById } = useProductIndex();
+
+  function productsLabel(order: PurchaseOrder): string {
+    return order.items.map((item) => productLabel(productsById.get(item.productId), item.productId)).join(", ");
+  }
+
+  function toggleSort(column: SortColumn) {
+    setSort((current) => {
+      if (current?.column !== column) return { column, direction: "asc" };
+      return current.direction === "asc" ? { column, direction: "desc" } : null;
+    });
+  }
+
+  function sortIndicator(column: SortColumn): string {
+    if (sort?.column !== column) return "";
+    return sort.direction === "asc" ? " ▲" : " ▼";
+  }
 
   const params = {
     branchId: isAdmin ? branchId || undefined : undefined,
@@ -124,14 +146,33 @@ export function PurchaseOrdersPage() {
         isEmpty={(result) => result.content.length === 0}
         emptyTitle="No hay órdenes de compra que coincidan con los filtros."
       >
-        {(result) => (
+        {(result) => {
+          const sortedContent = [...result.content];
+          if (sort) {
+            const key = (order: PurchaseOrder) =>
+              sort.column === "supplier" ? suppliersById.get(order.supplierId)?.name ?? order.supplierId : productsLabel(order);
+            sortedContent.sort((a, b) => {
+              const comparison = key(a).localeCompare(key(b), "es", { sensitivity: "base" });
+              return sort.direction === "asc" ? comparison : -comparison;
+            });
+          }
+          return (
           <>
             <table>
-              <caption>{result.totalElements} orden(es) de compra</caption>
+              <caption>{result.totalElements} orden(es) de compra{sort ? " · orden alfabético dentro de esta página" : ""}</caption>
               <thead>
                 <tr>
                   <th scope="col">Orden</th>
-                  <th scope="col">Proveedor</th>
+                  <th scope="col">
+                    <button type="button" className="th-sort" onClick={() => toggleSort("supplier")}>
+                      Proveedor{sortIndicator("supplier")}
+                    </button>
+                  </th>
+                  <th scope="col">
+                    <button type="button" className="th-sort" onClick={() => toggleSort("product")}>
+                      Producto{sortIndicator("product")}
+                    </button>
+                  </th>
                   <th scope="col">Sucursal</th>
                   <th scope="col">Fecha</th>
                   <th scope="col">Condición de pago</th>
@@ -141,10 +182,11 @@ export function PurchaseOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {result.content.map((order) => (
+                {sortedContent.map((order) => (
                   <tr key={order.id}>
                     <td>{order.orderNumber}</td>
                     <td>{suppliersById.get(order.supplierId)?.name ?? order.supplierId}</td>
+                    <td>{productsLabel(order)}</td>
                     <td>{branchesById.get(order.branchId)?.name ?? order.branchId}</td>
                     <td>{new Date(order.orderDate).toLocaleDateString()}</td>
                     <td>{order.paymentTerm ?? "—"}</td>
@@ -168,7 +210,8 @@ export function PurchaseOrdersPage() {
             </table>
             <Pagination page={result} onPageChange={setPage} />
           </>
-        )}
+          );
+        }}
       </AsyncBoundary>
 
       {cancelling ? (

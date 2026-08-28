@@ -40,7 +40,7 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("UNIDAD_DE_MEDIDA_NO_ENCONTRADA", "Unidad de medida no encontrada."));
 
         Product product = productRepository.save(
-                new Product(request.sku(), request.name(), request.description(), baseUnit.getId()));
+                new Product(request.sku(), request.name(), request.description(), baseUnit.getId(), request.minimumStock()));
 
         // BR-011 / docs/DOMAIN_MODEL.md, sección 2.6: la unidad base se crea
         // automáticamente con factor 1 - garantiza que siempre exista una

@@ -99,6 +99,28 @@ describe("Nueva venta", () => {
     expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 
+  it("bloquea la venta con un mensaje accionable cuando el producto no tiene precio vigente, sin dejar tecleárselo", async () => {
+    // El precio nunca es un input (siempre viene de la lista de precios); si
+    // falta, se bloquea aquí con un mensaje claro en vez de que la venta
+    // falle recién al confirmar con "el precio es null".
+    seedSession("OPERATOR");
+    const fetchSpy = mockFetch(saleRoutes());
+    renderApp("/ventas/nueva");
+
+    // SKU-002 (Arena fina) no tiene ninguna fila en PRICES.
+    await selectOption(/producto de la línea 1/i, "11");
+    await userEvent.type(screen.getByLabelText(/cantidad de la línea 1/i), "2");
+
+    const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
+    expect(await within(row).findByText(/sin precio vigente/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /revisar venta/i }));
+
+    expect(await screen.findByText(/no tiene un precio vigente en la lista seleccionada/i)).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST" && String((init as RequestInit).body).includes("/sales"))).toBe(false);
+    expect(screen.queryByRole("heading", { name: /confirmar venta/i })).not.toBeInTheDocument();
+  });
+
   it("confirma el resumen y envía la venta con Idempotency-Key", async () => {
     seedSession("OPERATOR");
     const fetchSpy = mockFetch(

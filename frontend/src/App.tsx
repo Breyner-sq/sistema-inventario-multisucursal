@@ -59,10 +59,14 @@ export default function App() {
 
           {/* Crear orden de compra o venta es una acción de escritura de pleno
               derecho, no una vista mixta como /productos o /inventario: sin
-              esta guarda, un MANAGER llegaría por URL a un formulario que
-              parece operativo y solo fallaría con 403 al enviarlo. */}
-          <Route element={<RequireRole roles={["OPERATOR", "ADMIN"]} />}>
+              esta guarda, un rol sin permiso llegaría por URL a un formulario
+              que parece operativo y solo fallaría con 403 al enviarlo.
+              Compras admite MANAGER (mismas capacidades que ADMIN); ventas no
+              cambió. */}
+          <Route element={<RequireRole roles={["OPERATOR", "MANAGER", "ADMIN"]} />}>
             <Route path="/compras/nueva" element={<NewPurchaseOrderPage />} />
+          </Route>
+          <Route element={<RequireRole roles={["OPERATOR", "ADMIN"]} />}>
             <Route path="/ventas/nueva" element={<NewSalePage />} />
           </Route>
 

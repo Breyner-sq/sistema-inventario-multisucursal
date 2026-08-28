@@ -94,7 +94,10 @@ export function SaleLineRow({
         />
         {errors.quantity ? <span role="alert" className="field__error">{errors.quantity}</span> : null}
       </td>
-      <td>{line.productId ? (unitPrice !== undefined ? unitPrice : "sin precio") : "—"}</td>
+      <td>
+        {line.productId ? (unitPrice !== undefined ? unitPrice : "Sin precio vigente") : "—"}
+        {errors.price ? <span role="alert" className="field__error">{errors.price}</span> : null}
+      </td>
       <td>
         <input
           aria-label={`Descuento de la línea ${index + 1}`}

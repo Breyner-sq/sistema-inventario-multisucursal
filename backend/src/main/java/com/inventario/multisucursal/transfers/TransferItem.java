@@ -69,6 +69,9 @@ public class TransferItem {
     @Column(name = "follow_up_transfer_id")
     private Long followUpTransferId;
 
+    @Column(name = "treatment_notes", length = 1000)
+    private String treatmentNotes;
+
     protected TransferItem() {
         // JPA
     }
@@ -137,5 +140,9 @@ public class TransferItem {
 
     public Long getFollowUpTransferId() {
         return followUpTransferId;
+    }
+
+    public String getTreatmentNotes() {
+        return treatmentNotes;
     }
 }

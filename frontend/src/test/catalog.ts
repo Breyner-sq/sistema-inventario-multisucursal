@@ -27,8 +27,8 @@ export const UNITS: UnitOfMeasure[] = [
 ];
 
 export const PRODUCTS: Product[] = [
-  { id: "10", sku: "SKU-001", name: "Cemento gris", description: "Saco de 50 kg", baseUnitOfMeasureId: "1", active: true },
-  { id: "11", sku: "SKU-002", name: "Arena fina", description: null, baseUnitOfMeasureId: "1", active: false },
+  { id: "10", sku: "SKU-001", name: "Cemento gris", description: "Saco de 50 kg", baseUnitOfMeasureId: "1", active: true, minimumStock: 10 },
+  { id: "11", sku: "SKU-002", name: "Arena fina", description: null, baseUnitOfMeasureId: "1", active: false, minimumStock: 0 },
 ];
 
 export const PRODUCT_UNITS: ProductUnit[] = [
@@ -157,6 +157,7 @@ export function transfer(overrides: Partial<Transfer> = {}): Transfer {
         quantityMissing: null,
         discrepancyTreatment: null,
         followUpTransferId: null,
+        treatmentNotes: null,
       },
     ],
     ...overrides,

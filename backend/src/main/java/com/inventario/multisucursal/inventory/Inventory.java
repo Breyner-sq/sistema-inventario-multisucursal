@@ -59,11 +59,22 @@ public class Inventory {
     }
 
     public Inventory(Long productId, Long branchId) {
+        this(productId, branchId, BigDecimal.ZERO);
+    }
+
+    /**
+     * {@code minimumStock} inicial tomado de {@code Product.minimumStock}
+     * (BR-010, ajuste aprobado: el producto define el mínimo por defecto que
+     * recibe cada sucursal la primera vez que registra stock de él). Sigue
+     * sin existir un endpoint que edite este valor después de creada la fila
+     * — limitación conocida, documentada en docs/STATUS.md.
+     */
+    public Inventory(Long productId, Long branchId, BigDecimal minimumStock) {
         this.productId = productId;
         this.branchId = branchId;
         this.quantityOnHand = BigDecimal.ZERO;
         this.averageUnitCost = BigDecimal.ZERO;
-        this.minimumStock = BigDecimal.ZERO;
+        this.minimumStock = minimumStock;
         this.version = 0L;
         this.updatedAt = Instant.now();
     }

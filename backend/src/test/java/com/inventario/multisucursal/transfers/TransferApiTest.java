@@ -572,7 +572,10 @@ class TransferApiTest {
     }
 
     @Test
-    void operatorCannotApproveAndManagerCannotDispatch() {
+    void operatorCannotApproveButManagerCanDispatchAndReceive() {
+        // La aprobación sigue siendo exclusiva de MANAGER/ADMIN; despachar y
+        // recibir ahora también las puede ejecutar un MANAGER (ampliación de
+        // permisos), no solo OPERATOR/ADMIN.
         String productId = createProduct("SKU-TR-029");
         stockUp(productId, origin.getId(), 100);
         TransferResponse transfer = request(productId, 10).getBody();
@@ -582,9 +585,13 @@ class TransferApiTest {
         assertThat(operatorApproving.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
 
         approve(transfer.id(), transfer.items().get(0).id(), 10, originManagerToken, TransferResponse.class);
-        ResponseEntity<String> managerDispatching = dispatch(transfer.id(), transfer.items().get(0).id(), 10, originManagerToken, String.class);
-        assertThat(managerDispatching.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(managerDispatching.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+        ResponseEntity<TransferResponse> managerDispatching =
+                dispatch(transfer.id(), transfer.items().get(0).id(), 10, originManagerToken, TransferResponse.class);
+        assertThat(managerDispatching.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        ResponseEntity<TransferResponse> managerReceiving =
+                receive(transfer.id(), transfer.items().get(0).id(), 10, destinationManagerToken, TransferResponse.class);
+        assertThat(managerReceiving.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
@@ -625,7 +632,7 @@ class TransferApiTest {
 
     private String createProduct(String sku) {
         return restTemplate.exchange("/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId()),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0),
                         authHeaders(originOperatorToken)),
                 ProductResponse.class).getBody().id();
     }

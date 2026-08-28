@@ -338,7 +338,7 @@ class InventoryAdjustmentApiTest {
     private String createProduct(String sku) {
         ResponseEntity<ProductResponse> response = post(
                 "/api/v1/products",
-                Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId()),
+                Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0),
                 operatorAToken,
                 ProductResponse.class);
         return response.getBody().id();

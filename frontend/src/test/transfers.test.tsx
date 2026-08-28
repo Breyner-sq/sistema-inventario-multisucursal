@@ -120,6 +120,36 @@ describe("Acciones por estado, rol y sucursal", () => {
 
     expect(await screen.findByRole("button", { name: /recibir/i })).toBeInTheDocument();
   });
+
+  it("MANAGER de origen también ve Despachar (ampliación de permisos)", async () => {
+    seedSession("MANAGER");
+    mockFetch(transferRoutes((url) => (/\/transfers\/\d+$/.test(url) ? jsonResponse(200, transfer({ status: "APPROVED", items: [{ ...transfer().items[0], quantityApproved: 10 }] })) : undefined)));
+    renderApp("/transferencias/500");
+
+    expect(await screen.findByRole("button", { name: /despachar/i })).toBeInTheDocument();
+  });
+
+  it("MANAGER de destino también ve Recibir (ampliación de permisos)", async () => {
+    seedSession("MANAGER", "2");
+    mockFetch(
+      transferRoutes((url) =>
+        /\/transfers\/\d+$/.test(url)
+          ? jsonResponse(
+              200,
+              transfer({
+                status: "IN_TRANSIT",
+                originBranchId: "1",
+                destinationBranchId: "2",
+                items: [{ ...transfer().items[0], quantityApproved: 10, quantityShipped: 10 }],
+              }),
+            )
+          : undefined,
+      ),
+    );
+    renderApp("/transferencias/500");
+
+    expect(await screen.findByRole("button", { name: /recibir/i })).toBeInTheDocument();
+  });
 });
 
 describe("Recepción parcial y faltante", () => {
@@ -167,6 +197,34 @@ describe("Recepción parcial y faltante", () => {
     expect(await screen.findByText(/se creó la transferencia de reposición/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "#999" })).toHaveAttribute("href", "/transferencias/999");
     expect(screen.getByText(/quedó cerrada/i)).toBeInTheDocument();
+  });
+
+  it("una reclamación ya registrada muestra su detalle a cualquiera que consulte la transferencia después", async () => {
+    // Tanto la sucursal origen como la destino pueden ver el detalle de una
+    // RECLAMACION ya creada, no solo quien la registró — el detalle (notas)
+    // se persiste y se expone en la respuesta, no se pierde tras crearla.
+    seedSession("OPERATOR", "2"); // sucursal destino, no quien la trató
+    const closed = transfer({
+      status: "CLOSED",
+      originBranchId: "1",
+      destinationBranchId: "2",
+      items: [
+        {
+          ...transfer().items[0],
+          quantityApproved: 10,
+          quantityShipped: 10,
+          quantityReceived: 6,
+          quantityMissing: 4,
+          discrepancyTreatment: "RECLAMACION",
+          treatmentNotes: "El transportista reconoció el faltante; a la espera de nota de crédito.",
+        },
+      ],
+    });
+    mockFetch(transferRoutes((url) => (/\/transfers\/\d+$/.test(url) ? jsonResponse(200, closed) : undefined)));
+    renderApp("/transferencias/500");
+
+    expect(await screen.findByText("Reclamación")).toBeInTheDocument();
+    expect(screen.getByText(/el transportista reconoció el faltante/i)).toBeInTheDocument();
   });
 });
 

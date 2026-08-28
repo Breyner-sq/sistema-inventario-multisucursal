@@ -13,7 +13,8 @@ public record TransferItemResponse(
         BigDecimal quantityReceived,
         BigDecimal quantityMissing,
         DiscrepancyTreatment discrepancyTreatment,
-        String followUpTransferId) {
+        String followUpTransferId,
+        String treatmentNotes) {
 
     public static TransferItemResponse from(TransferItem item) {
         return new TransferItemResponse(
@@ -26,6 +27,7 @@ public record TransferItemResponse(
                 item.getQuantityReceived(),
                 item.getQuantityMissing(),
                 item.getDiscrepancyTreatment(),
-                item.getFollowUpTransferId() != null ? String.valueOf(item.getFollowUpTransferId()) : null);
+                item.getFollowUpTransferId() != null ? String.valueOf(item.getFollowUpTransferId()) : null,
+                item.getTreatmentNotes());
     }
 }

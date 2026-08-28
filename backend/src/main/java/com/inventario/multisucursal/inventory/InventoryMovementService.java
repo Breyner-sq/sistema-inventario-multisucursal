@@ -177,8 +177,11 @@ public class InventoryMovementService {
     private Inventory findOrCreateInventory(Long productId, Long branchId) {
         return inventoryRepository.findByProductIdAndBranchId(productId, branchId)
                 .orElseGet(() -> {
+                    BigDecimal minimumStock = productRepository.findById(productId)
+                            .map(Product::getMinimumStock)
+                            .orElse(BigDecimal.ZERO);
                     try {
-                        return inventoryRepository.saveAndFlush(new Inventory(productId, branchId));
+                        return inventoryRepository.saveAndFlush(new Inventory(productId, branchId, minimumStock));
                     } catch (DataIntegrityViolationException raceOnFirstCreation) {
                         return inventoryRepository.findByProductIdAndBranchId(productId, branchId).orElseThrow();
                     }

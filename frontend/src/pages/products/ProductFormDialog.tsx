@@ -30,6 +30,7 @@ export function ProductFormDialog({
   const [name, setName] = useState(product?.name ?? "");
   const [description, setDescription] = useState(product?.description ?? "");
   const [baseUnitId, setBaseUnitId] = useState(product?.baseUnitOfMeasureId ?? "");
+  const [minimumStock, setMinimumStock] = useState(product ? String(product.minimumStock) : "");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const mutation = useMutation({
@@ -41,6 +42,7 @@ export function ProductFormDialog({
             name: name.trim(),
             description: description.trim() || null,
             baseUnitOfMeasureId: Number(baseUnitId),
+            minimumStock: Number(minimumStock),
           }),
     onSuccess: () => {
       // Revalidar después de mutar: la lista vuelve a consultarse contra la
@@ -61,6 +63,9 @@ export function ProductFormDialog({
     if (!isEdit && !sku.trim()) errors.sku = "El SKU es obligatorio.";
     if (!name.trim()) errors.name = "El nombre es obligatorio.";
     if (!isEdit && !baseUnitId) errors.baseUnitOfMeasureId = "Selecciona la unidad base.";
+    if (!isEdit && (!minimumStock.trim() || Number(minimumStock) < 0)) {
+      errors.minimumStock = "Indica el stock mínimo (0 o mayor).";
+    }
     setLocalErrors(errors);
     if (Object.keys(errors).length > 0) return;
     mutation.mutate();
@@ -118,6 +123,23 @@ export function ProductFormDialog({
               </option>
             ))}
           </SelectField>
+        ) : null}
+
+        {!isEdit ? (
+          <>
+            <Field
+              id="product-minimum-stock"
+              label="Stock mínimo"
+              inputMode="decimal"
+              value={minimumStock}
+              onChange={(event) => setMinimumStock(event.target.value)}
+              error={errorFor("minimumStock")}
+            />
+            <p className="state__hint">
+              Umbral que usarán el estado de reabastecimiento y las alertas de stock en cada sucursal que reciba este
+              producto por primera vez.
+            </p>
+          </>
         ) : null}
 
         <FormErrorMessage error={serverErrors.general ? mutation.error : null} />

@@ -116,6 +116,8 @@ export interface Product {
   description: string | null;
   baseUnitOfMeasureId: string;
   active: boolean;
+  /** Valor por defecto para `Inventory.minimumStock` la primera vez que una sucursal registra movimiento de este producto (BR-010). */
+  minimumStock: number;
 }
 
 export interface CreateProductRequest {
@@ -123,6 +125,7 @@ export interface CreateProductRequest {
   name: string;
   description?: string | null;
   baseUnitOfMeasureId: number;
+  minimumStock: number;
 }
 
 export interface UpdateProductRequest {
@@ -386,6 +389,8 @@ export interface TransferItem {
   quantityMissing: number | null;
   discrepancyTreatment: DiscrepancyTreatment | null;
   followUpTransferId: string | null;
+  /** Detalle del tratamiento (p. ej. el contenido de una reclamación) — visible para origen y destino una vez registrado. */
+  treatmentNotes: string | null;
 }
 
 export interface Transfer {
@@ -456,6 +461,7 @@ export interface ApplyDiscrepancyTreatmentRequest {
 export interface DiscrepancyTreatmentResponse {
   transferItemId: string;
   discrepancyTreatment: DiscrepancyTreatment;
+  notes: string | null;
   followUpTransferId: string | null;
   transferStatus: TransferStatus;
 }

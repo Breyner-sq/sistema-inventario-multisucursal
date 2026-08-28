@@ -57,23 +57,76 @@ describe("Listado de compras", () => {
       expect(await screen.findByRole("button", { name: /cancelar/i })).toBeInTheDocument();
     });
 
-    it("MANAGER no ve acciones de escritura pero sí el listado", async () => {
+    it("MANAGER ve las mismas acciones de escritura que ADMIN/OPERATOR", async () => {
+      // Ampliación de permisos: MANAGER puede crear y gestionar compras igual que ADMIN.
       seedSession("MANAGER");
       mockFetch(purchaseRoutes());
       renderApp("/compras");
 
-      expect(await screen.findByText("OC-ABC12345")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /nueva orden/i })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /cancelar/i })).not.toBeInTheDocument();
+      const row = (await screen.findByText("OC-ABC12345")).closest("tr")!;
+      expect(screen.getByRole("button", { name: /nueva orden/i })).toBeInTheDocument();
+      expect(within(row).getByRole("button", { name: /cancelar/i })).toBeInTheDocument();
     });
 
-    it("forzar la URL de alta como MANAGER envía a la página de sin permiso", async () => {
+    it("MANAGER puede acceder al formulario de alta", async () => {
       seedSession("MANAGER");
       mockFetch(purchaseRoutes());
       renderApp("/compras/nueva");
 
-      expect(await screen.findByText(/sin permiso/i)).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: /nueva orden de compra/i })).toBeInTheDocument();
     });
+  });
+});
+
+describe("Tabla de compras: producto y orden", () => {
+  const orderWithArena = purchaseOrder({
+    id: "500",
+    orderNumber: "OC-1-ARENA",
+    items: [{ id: "5001", productId: "11", unitOfMeasureId: "1", quantityOrdered: 5, quantityReceived: 0, pending: 5, unitPrice: 10, discountPercentage: 0, lineTotal: 50 }],
+  });
+  const orderWithCemento = purchaseOrder({
+    id: "501",
+    orderNumber: "OC-2-CEMENTO",
+    items: [{ id: "5002", productId: "10", unitOfMeasureId: "1", quantityOrdered: 5, quantityReceived: 0, pending: 5, unitPrice: 10, discountPercentage: 0, lineTotal: 50 }],
+  });
+
+  function tableRoutes() {
+    return purchaseRoutes((url) => (url.includes("/purchase-orders") ? jsonResponse(200, page([orderWithArena, orderWithCemento])) : undefined));
+  }
+
+  function orderedOrderNumbers() {
+    return screen.getAllByRole("row").slice(1).map((row) => within(row).getByRole("cell", { name: /^OC-/ }).textContent);
+  }
+
+  it("muestra el producto de cada orden en su propia columna", async () => {
+    seedSession("OPERATOR");
+    mockFetch(tableRoutes());
+    renderApp("/compras");
+
+    const arenaRow = (await screen.findByText("OC-1-ARENA")).closest("tr")!;
+    expect(within(arenaRow).getByText("SKU-002 — Arena fina")).toBeInTheDocument();
+    const cementoRow = screen.getByText("OC-2-CEMENTO").closest("tr")!;
+    expect(within(cementoRow).getByText("SKU-001 — Cemento gris")).toBeInTheDocument();
+  });
+
+  it("ordena la página actual por producto o por proveedor al hacer clic en el encabezado", async () => {
+    seedSession("OPERATOR");
+    mockFetch(tableRoutes());
+    renderApp("/compras");
+
+    await screen.findByText("OC-1-ARENA");
+    // Orden tal cual la devuelve el backend: Arena (SKU-002) antes que Cemento (SKU-001).
+    expect(orderedOrderNumbers()).toEqual(["OC-1-ARENA", "OC-2-CEMENTO"]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^producto/i }));
+    expect(screen.getByText(/orden alfabético dentro de esta página/i)).toBeInTheDocument();
+    expect(orderedOrderNumbers()).toEqual(["OC-2-CEMENTO", "OC-1-ARENA"]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^producto/i }));
+    expect(orderedOrderNumbers()).toEqual(["OC-1-ARENA", "OC-2-CEMENTO"]);
+
+    await userEvent.click(screen.getByRole("button", { name: /^producto/i }));
+    expect(screen.queryByText(/orden alfabético dentro de esta página/i)).not.toBeInTheDocument();
   });
 });
 

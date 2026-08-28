@@ -74,7 +74,7 @@ public class TransferController {
     }
 
     @PostMapping("/{id}/dispatch")
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public TransferResponse dispatch(
             @PathVariable Long id,
             @Valid @RequestBody DispatchTransferRequest request,
@@ -83,7 +83,7 @@ public class TransferController {
     }
 
     @PostMapping("/{id}/receive")
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public TransferResponse receive(
             @PathVariable Long id,
             @Valid @RequestBody ReceiveTransferRequest request,

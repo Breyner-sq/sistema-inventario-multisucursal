@@ -6,6 +6,7 @@ com/inventario/multisucursal/sales/SaleRollbackTest.class
 com/inventario/multisucursal/common/audit/AuditableEntityTest.class
 com/inventario/multisucursal/sales/SaleConcurrencyTest.class
 com/inventario/multisucursal/purchases/PurchaseReceiptRollbackTest.class
+com/inventario/multisucursal/products/ProductApiTest$InventoryPageResponse.class
 com/inventario/multisucursal/common/audit/AuditableTestEntity.class
 com/inventario/multisucursal/sales/SaleApiTest.class
 com/inventario/multisucursal/events/EventStreamApiTest$StreamResult.class

@@ -52,7 +52,7 @@ public interface TransferItemRepository extends JpaRepository<TransferItem, Long
     @Query("""
             UPDATE TransferItem i
                SET i.discrepancyTreatment = :treatment, i.treatmentByUserId = :userId,
-                   i.treatmentAt = :now, i.followUpTransferId = :followUpTransferId
+                   i.treatmentAt = :now, i.followUpTransferId = :followUpTransferId, i.treatmentNotes = :notes
              WHERE i.id = :id AND i.discrepancyTreatment IS NULL
             """)
     int markTreated(
@@ -60,5 +60,6 @@ public interface TransferItemRepository extends JpaRepository<TransferItem, Long
             @Param("treatment") DiscrepancyTreatment treatment,
             @Param("userId") Long userId,
             @Param("now") Instant now,
-            @Param("followUpTransferId") Long followUpTransferId);
+            @Param("followUpTransferId") Long followUpTransferId,
+            @Param("notes") String notes);
 }

@@ -350,7 +350,7 @@ public class TransferService {
             followUpTransferId = followUp.getId();
         }
 
-        if (transferItemRepository.markTreated(transferItemId, request.treatment(), treatedByUserId, Instant.now(), followUpTransferId) == 0) {
+        if (transferItemRepository.markTreated(transferItemId, request.treatment(), treatedByUserId, Instant.now(), followUpTransferId, request.notes()) == 0) {
             throw new ResourceConflictException("FALTANTE_YA_TRATADO", "El faltante de esta línea ya tenía un tratamiento definido.");
         }
 
@@ -366,6 +366,7 @@ public class TransferService {
         return new DiscrepancyTreatmentResponse(
                 String.valueOf(transferItemId),
                 request.treatment(),
+                request.notes(),
                 followUpTransferId != null ? String.valueOf(followUpTransferId) : null,
                 finalStatus);
     }
@@ -469,8 +470,11 @@ public class TransferService {
     private Inventory findOrCreateInventory(Long productId, Long branchId) {
         return inventoryRepository.findByProductIdAndBranchId(productId, branchId)
                 .orElseGet(() -> {
+                    BigDecimal minimumStock = productRepository.findById(productId)
+                            .map(Product::getMinimumStock)
+                            .orElse(BigDecimal.ZERO);
                     try {
-                        return inventoryRepository.saveAndFlush(new Inventory(productId, branchId));
+                        return inventoryRepository.saveAndFlush(new Inventory(productId, branchId, minimumStock));
                     } catch (DataIntegrityViolationException raceOnFirstCreation) {
                         return inventoryRepository.findByProductIdAndBranchId(productId, branchId).orElseThrow();
                     }

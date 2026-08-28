@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.branches.BranchApiTest
 -------------------------------------------------------------------------------
-Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.351 s -- in com.inventario.multisucursal.branches.BranchApiTest
+Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.695 s -- in com.inventario.multisucursal.branches.BranchApiTest

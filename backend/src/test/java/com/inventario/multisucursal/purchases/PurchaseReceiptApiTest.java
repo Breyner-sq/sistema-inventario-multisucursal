@@ -353,17 +353,17 @@ class PurchaseReceiptApiTest {
     // ---- Permisos y sucursal ----
 
     @Test
-    void managerCannotReceivePurchases() {
+    void managerCanReceivePurchases() {
+        // Ampliación de permisos: MANAGER queda habilitado igual que OPERATOR/ADMIN.
         String productId = createProduct("SKU-PERM-001");
         PurchaseOrderResponse order = createOrder(branchA.getId(), productId, 5, 15, null, operatorAToken);
         String itemId = order.items().get(0).id();
 
-        ResponseEntity<String> response = receive(
+        ResponseEntity<PurchaseReceiptResponse> response = receive(
                 order.id(), List.of(Map.of("purchaseOrderItemId", Long.valueOf(itemId), "quantityReceived", 1, "unitPrice", 15)),
-                UUID.randomUUID().toString(), managerAToken, String.class);
+                UUID.randomUUID().toString(), managerAToken, PurchaseReceiptResponse.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
@@ -398,7 +398,7 @@ class PurchaseReceiptApiTest {
     private String createProduct(String sku) {
         ResponseEntity<ProductResponse> response = restTemplate.exchange(
                 "/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId()), authHeaders(operatorAToken)),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0), authHeaders(operatorAToken)),
                 ProductResponse.class);
         return response.getBody().id();
     }

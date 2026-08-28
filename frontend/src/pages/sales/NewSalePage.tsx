@@ -102,6 +102,12 @@ export function NewSalePage() {
       else if (seenProducts.has(line.productId)) lineErrors.productId = "Este producto ya está en otra línea.";
       else seenProducts.add(line.productId);
       if (!line.quantity.trim() || !(Number(line.quantity) > 0)) lineErrors.quantity = "Cantidad mayor que cero.";
+      // El precio nunca se teclea (viene de la lista seleccionada): si no hay
+      // uno vigente para este producto, se bloquea aquí con un mensaje
+      // accionable en vez de dejar que la venta falle recién al confirmar.
+      if (line.productId && priceListId && pricesQuery.byProductId.get(line.productId) === undefined) {
+        lineErrors.price = "Este producto no tiene un precio vigente en la lista seleccionada.";
+      }
       if (Object.keys(lineErrors).length > 0) errors.lines[index] = lineErrors;
     });
 

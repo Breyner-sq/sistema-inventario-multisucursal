@@ -4,6 +4,7 @@ package com.inventario.multisucursal.transfers;
 public record DiscrepancyTreatmentResponse(
         String transferItemId,
         DiscrepancyTreatment discrepancyTreatment,
+        String notes,
         String followUpTransferId,
         TransferStatus transferStatus) {
 }

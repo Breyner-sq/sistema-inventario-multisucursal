@@ -422,7 +422,7 @@ class SaleApiTest {
     private String createProduct(String sku) {
         ResponseEntity<ProductResponse> response = restTemplate.exchange(
                 "/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId()), authHeaders(operatorAToken)),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0), authHeaders(operatorAToken)),
                 ProductResponse.class);
         return response.getBody().id();
     }

@@ -8,15 +8,29 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
+
 /**
- * Producto (docs/DOMAIN_MODEL.md, sección 2.5; RF-005). Deliberadamente sin
- * ningún campo de cantidad/stock — eso pertenece a {@code Inventory}, un
- * módulo aparte que esta clase no anticipa ni acopla (condición de parada de
- * esta fase: "no implementes stock dentro de Product").
+ * Producto (docs/DOMAIN_MODEL.md, sección 2.5; RF-005). No tiene cantidad ni
+ * costo — eso sigue perteneciendo a {@code Inventory}, que es por sucursal
+ * (un producto no tiene "un" stock, tiene uno por cada sucursal donde se
+ * mueve). {@code minimumStock} es la única excepción, y es deliberada: no es
+ * una cantidad de stock, es el <b>valor por defecto</b> que recibe el mínimo
+ * de una sucursal la primera vez que esa sucursal registra movimiento de
+ * este producto ({@code InventoryMovementService}/{@code PurchaseReceiptService}/
+ * {@code TransferService}, ver {@code findOrCreateInventory}) — no lo
+ * sobrescribe si la fila de `Inventory` ya existe. Ajuste aprobado sobre la
+ * condición de parada original de esta entidad ("no implementes stock dentro
+ * de Product"), para que crear un producto pueda pedir de una vez el umbral
+ * que alimentará el estado de reabastecimiento y las alertas de stock mínimo
+ * (BR-010), sin depender de un ajuste manual posterior por cada sucursal.
  *
  * <p>{@code sku} es la clave de negocio, inmutable después de creado —
  * igual que {@code Branch.code} (docs/API_DESIGN.md, sección 7.4: el PATCH
- * actualiza "nombre/descripción", no el SKU).
+ * actualiza "nombre/descripción", no el SKU). {@code minimumStock} tampoco
+ * se edita después de creado (mismo criterio): es un valor de arranque, no
+ * un control operativo continuo — ese sigue siendo `Inventory.minimum_stock`
+ * por sucursal.
  */
 @Entity
 @Table(name = "product")
@@ -41,15 +55,24 @@ public class Product extends Auditable {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "minimum_stock", nullable = false, precision = 19, scale = 6)
+    private BigDecimal minimumStock;
+
     protected Product() {
         // JPA
     }
 
+    /** Sin {@code minimumStock} explícito: queda en 0, igual que el valor por defecto histórico de {@code Inventory.minimum_stock}. */
     public Product(String sku, String name, String description, Long baseUnitOfMeasureId) {
+        this(sku, name, description, baseUnitOfMeasureId, BigDecimal.ZERO);
+    }
+
+    public Product(String sku, String name, String description, Long baseUnitOfMeasureId, BigDecimal minimumStock) {
         this.sku = sku;
         this.name = name;
         this.description = description;
         this.baseUnitOfMeasureId = baseUnitOfMeasureId;
+        this.minimumStock = minimumStock;
     }
 
     public void updateDetails(String name, String description) {
@@ -87,5 +110,9 @@ public class Product extends Auditable {
 
     public boolean isActive() {
         return active;
+    }
+
+    public BigDecimal getMinimumStock() {
+        return minimumStock;
     }
 }

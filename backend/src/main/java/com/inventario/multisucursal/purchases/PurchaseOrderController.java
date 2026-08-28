@@ -47,7 +47,7 @@ public class PurchaseOrderController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public PurchaseOrderResponse create(
             @Valid @RequestBody CreatePurchaseOrderRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
@@ -56,13 +56,13 @@ public class PurchaseOrderController {
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public PurchaseOrderResponse cancel(@PathVariable Long id) {
         return purchaseOrderService.cancel(id);
     }
 
     @PostMapping("/{id}/receipts")
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public PurchaseReceiptResponse receive(
             @PathVariable Long id,
             @Valid @RequestBody PurchaseReceiptRequest request,
