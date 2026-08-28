@@ -1,14 +1,18 @@
 import { jsonResponse } from "./harness";
 import type {
+  ComplianceMetrics,
   InventoryMovement,
   InventoryRow,
+  LogisticsComplianceResponse,
   Price,
   PriceList,
   Product,
   ProductUnit,
   PurchaseOrder,
+  Route,
   Sale,
   Supplier,
+  Transfer,
   UnitOfMeasure,
 } from "../types/api";
 
@@ -121,6 +125,76 @@ export function sale(overrides: Partial<Sale> = {}): Sale {
   };
 }
 
+export function transfer(overrides: Partial<Transfer> = {}): Transfer {
+  return {
+    id: "500",
+    transferNumber: "TR-ABC12345",
+    status: "REQUESTED",
+    originBranchId: "1",
+    destinationBranchId: "2",
+    routeId: null,
+    urgency: false,
+    carrierName: null,
+    estimatedArrivalDate: null,
+    requestedByUserId: "1",
+    approvedByUserId: null,
+    requestedAt: "2026-08-27T10:00:00Z",
+    approvedAt: null,
+    dispatchedAt: null,
+    receivedAt: null,
+    items: [
+      {
+        id: "5000",
+        productId: "10",
+        unitOfMeasureId: "1",
+        quantityRequested: 10,
+        quantityApproved: null,
+        quantityShipped: null,
+        quantityReceived: null,
+        quantityMissing: null,
+        discrepancyTreatment: null,
+        followUpTransferId: null,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export const ROUTES: Route[] = [{ id: "1", originBranchId: "1", destinationBranchId: "2", classification: "TIME" }];
+
+function complianceMetrics(overrides: Partial<ComplianceMetrics> = {}): ComplianceMetrics {
+  return {
+    dispatched: 4,
+    delivered: 3,
+    inTransit: 1,
+    overdueInTransit: 0,
+    onTime: 2,
+    late: 1,
+    notEvaluable: 0,
+    withShortages: 1,
+    complianceRate: 66.67,
+    averageDeliveryHours: 12.5,
+    ...overrides,
+  };
+}
+
+export function logisticsCompliance(overrides: Partial<LogisticsComplianceResponse> = {}): LogisticsComplianceResponse {
+  return {
+    appliedFilters: { branchId: null, routeId: null, dispatchedFrom: null, dispatchedTo: null },
+    summary: complianceMetrics(),
+    byRoute: [
+      {
+        routeId: "1",
+        originBranchId: "1",
+        destinationBranchId: "2",
+        classification: "TIME",
+        metrics: complianceMetrics(),
+      },
+    ],
+    ...overrides,
+  };
+}
+
 export function page<T>(content: T[], overrides: Partial<{ page: number; size: number; totalPages: number }> = {}) {
   return {
     content,
@@ -144,5 +218,6 @@ export function catalogResponse(url: string): Response | undefined {
   if (url.includes("/suppliers")) return jsonResponse(200, page(SUPPLIERS));
   if (/\/price-lists\/\d+\/prices/.test(url)) return jsonResponse(200, PRICES);
   if (url.includes("/price-lists")) return jsonResponse(200, page(PRICE_LISTS));
+  if (url.includes("/routes")) return jsonResponse(200, page(ROUTES));
   return undefined;
 }

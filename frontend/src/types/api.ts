@@ -300,3 +300,149 @@ export interface Price {
   validFrom: string;
   validTo: string | null;
 }
+
+// ---- Transferencias (docs/API_DESIGN.md, sección 7.9) ----
+
+export type TransferStatus =
+  | "REQUESTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "IN_TRANSIT"
+  | "RECEIVED_COMPLETE"
+  | "RECEIVED_PARTIAL"
+  | "CLOSED";
+
+export type DiscrepancyTreatment = "REENVIO" | "AJUSTE" | "RECLAMACION";
+
+export interface TransferItem {
+  id: string;
+  productId: string;
+  unitOfMeasureId: string;
+  quantityRequested: number;
+  quantityApproved: number | null;
+  quantityShipped: number | null;
+  quantityReceived: number | null;
+  quantityMissing: number | null;
+  discrepancyTreatment: DiscrepancyTreatment | null;
+  followUpTransferId: string | null;
+}
+
+export interface Transfer {
+  id: string;
+  transferNumber: string;
+  status: TransferStatus;
+  originBranchId: string;
+  destinationBranchId: string;
+  routeId: string | null;
+  urgency: boolean;
+  carrierName: string | null;
+  estimatedArrivalDate: string | null;
+  requestedByUserId: string;
+  approvedByUserId: string | null;
+  requestedAt: string;
+  approvedAt: string | null;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  items: TransferItem[];
+}
+
+export interface CreateTransferItemRequest {
+  productId: number;
+  quantityRequested: number;
+}
+
+export interface CreateTransferRequest {
+  originBranchId: number;
+  destinationBranchId: number;
+  urgency: boolean;
+  items: CreateTransferItemRequest[];
+}
+
+export interface ApproveTransferItemRequest {
+  transferItemId: number;
+  quantityApproved: number;
+}
+
+export interface ApproveTransferRequest {
+  items: ApproveTransferItemRequest[];
+}
+
+export interface DispatchTransferItemRequest {
+  transferItemId: number;
+  quantityShipped: number;
+}
+
+export interface DispatchTransferRequest {
+  carrierName?: string | null;
+  estimatedArrivalDate?: string | null;
+  items: DispatchTransferItemRequest[];
+}
+
+export interface ReceiveTransferItemRequest {
+  transferItemId: number;
+  quantityReceived: number;
+}
+
+export interface ReceiveTransferRequest {
+  items: ReceiveTransferItemRequest[];
+}
+
+export interface ApplyDiscrepancyTreatmentRequest {
+  treatment: DiscrepancyTreatment;
+  notes?: string | null;
+}
+
+export interface DiscrepancyTreatmentResponse {
+  transferItemId: string;
+  discrepancyTreatment: DiscrepancyTreatment;
+  followUpTransferId: string | null;
+  transferStatus: TransferStatus;
+}
+
+// ---- Logística: rutas y cumplimiento (docs/API_DESIGN.md, sección 7.9/7.10) ----
+
+export type RouteClassification = "PRIORITY" | "COST" | "TIME";
+
+export interface Route {
+  id: string;
+  originBranchId: string;
+  destinationBranchId: string;
+  classification: RouteClassification;
+}
+
+export interface CreateRouteRequest {
+  originBranchId: number;
+  destinationBranchId: number;
+  classification: RouteClassification;
+}
+
+export interface UpdateRouteRequest {
+  classification: RouteClassification;
+}
+
+export interface ComplianceMetrics {
+  dispatched: number;
+  delivered: number;
+  inTransit: number;
+  overdueInTransit: number;
+  onTime: number;
+  late: number;
+  notEvaluable: number;
+  withShortages: number;
+  complianceRate: number | null;
+  averageDeliveryHours: number | null;
+}
+
+export interface RouteCompliance {
+  routeId: string | null;
+  originBranchId: string;
+  destinationBranchId: string;
+  classification: RouteClassification | null;
+  metrics: ComplianceMetrics;
+}
+
+export interface LogisticsComplianceResponse {
+  appliedFilters: { branchId: string | null; routeId: string | null; dispatchedFrom: string | null; dispatchedTo: string | null };
+  summary: ComplianceMetrics;
+  byRoute: RouteCompliance[];
+}

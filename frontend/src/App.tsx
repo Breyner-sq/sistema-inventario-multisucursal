@@ -13,6 +13,11 @@ import { PurchaseOrderDetailPage } from "./pages/purchases/PurchaseOrderDetailPa
 import { SalesPage } from "./pages/sales/SalesPage";
 import { NewSalePage } from "./pages/sales/NewSalePage";
 import { SaleDetailPage } from "./pages/sales/SaleDetailPage";
+import { TransfersPage } from "./pages/transfers/TransfersPage";
+import { NewTransferRequestPage } from "./pages/transfers/NewTransferRequestPage";
+import { TransferDetailPage } from "./pages/transfers/TransferDetailPage";
+import { RoutesPage } from "./pages/logistics/RoutesPage";
+import { LogisticsCompliancePage } from "./pages/logistics/LogisticsCompliancePage";
 import { ForbiddenPage, HomePage, NotFoundPage, PlaceholderPage } from "./pages/SimplePages";
 
 /**
@@ -37,7 +42,14 @@ export default function App() {
           <Route path="/compras/:id" element={<PurchaseOrderDetailPage />} />
           <Route path="/ventas" element={<SalesPage />} />
           <Route path="/ventas/:id" element={<SaleDetailPage />} />
-          <Route path="/transferencias" element={<PlaceholderPage title="Transferencias" />} />
+          <Route path="/transferencias" element={<TransfersPage />} />
+          {/* Solicitar una transferencia lo puede hacer cualquiera de los tres
+              roles (OPERATOR/MANAGER/ADMIN) — no hace falta guarda de rol
+              aquí, a diferencia de compras/ventas donde MANAGER queda fuera. */}
+          <Route path="/transferencias/nueva" element={<NewTransferRequestPage />} />
+          <Route path="/transferencias/:id" element={<TransferDetailPage />} />
+          <Route path="/logistica/rutas" element={<RoutesPage />} />
+          <Route path="/logistica/cumplimiento" element={<LogisticsCompliancePage />} />
 
           {/* Crear orden de compra o venta es una acción de escritura de pleno
               derecho, no una vista mixta como /productos o /inventario: sin

@@ -29,19 +29,19 @@ export function renderApp(initialPath = "/"): RenderResult {
   );
 }
 
-export function userOfRole(role: Role): UserSummary {
+export function userOfRole(role: Role, branchId: string | null = role === "ADMIN" ? null : "1"): UserSummary {
   return {
     id: "1",
     name: role === "ADMIN" ? "Admin General" : "Persona Usuaria",
     email: `${role.toLowerCase()}@test.local`,
     role,
-    branchId: role === "ADMIN" ? null : "1",
+    branchId,
   };
 }
 
-/** Deja una sesión ya iniciada, como tras recargar la página. */
-export function seedSession(role: Role): UserSummary {
-  const user = userOfRole(role);
+/** Deja una sesión ya iniciada, como tras recargar la página. `branchId` permite probar un rol en una sucursal distinta de la "1" por defecto. */
+export function seedSession(role: Role, branchId?: string | null): UserSummary {
+  const user = userOfRole(role, branchId);
   sessionStorage.setItem("inventario.accessToken", "token-de-prueba");
   sessionStorage.setItem("inventario.user", JSON.stringify(user));
   return user;
@@ -80,4 +80,45 @@ export async function selectOption(labelRegex: RegExp, optionValue: string) {
   await waitFor(() => expect(within(select).getByRole("option", { name: (_, el) => el.getAttribute("value") === optionValue })).toBeInTheDocument());
   await userEvent.selectOptions(select, optionValue);
   return select;
+}
+
+/**
+ * Doble de prueba de `EventSource` (jsdom no lo implementa). Registra cada
+ * instancia creada en `instances` para que la prueba pueda tomar la más
+ * reciente y disparar un evento con `emit`, simulando la señal SSE que el
+ * backend enviaría (`useTransferRealtime`, ADR-009). `close()` no hace nada
+ * más que marcarse — no hay conexión real que cerrar.
+ */
+export class MockEventSource {
+  static instances: MockEventSource[] = [];
+  url: string;
+  closed = false;
+  onopen: (() => void) | null = null;
+  private listeners = new Map<string, Array<(event: MessageEvent) => void>>();
+
+  constructor(url: string) {
+    this.url = url;
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: MessageEvent) => void) {
+    const current = this.listeners.get(type) ?? [];
+    current.push(listener);
+    this.listeners.set(type, current);
+  }
+
+  close() {
+    this.closed = true;
+  }
+
+  emit(type: string, data: unknown) {
+    const event = { data: JSON.stringify(data) } as MessageEvent;
+    for (const listener of this.listeners.get(type) ?? []) listener(event);
+  }
+}
+
+/** Instala `MockEventSource` como `EventSource` global y limpia instancias previas. */
+export function mockEventSource() {
+  MockEventSource.instances = [];
+  vi.stubGlobal("EventSource", MockEventSource);
 }

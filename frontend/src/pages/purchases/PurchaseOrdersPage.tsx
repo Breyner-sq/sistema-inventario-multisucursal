@@ -6,7 +6,6 @@ import { cancelPurchaseOrder, listPurchaseOrders } from "../../api/endpoints/pur
 import { queryKeys, queryPrefixes } from "../../api/queryClient";
 import { canPurchases } from "../../auth/permissions";
 import { useAuth } from "../../auth/useAuth";
-import { FormErrorMessage } from "../../components/form/Field";
 import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Pagination } from "../../components/ui/Pagination";
@@ -117,8 +116,6 @@ export function PurchaseOrdersPage() {
         </div>
       </form>
 
-      <FormErrorMessage error={cancelMutation.error} />
-
       <AsyncBoundary
         isLoading={query.isPending}
         error={query.error}
@@ -180,6 +177,7 @@ export function PurchaseOrdersPage() {
           message={`La orden ${cancelling.orderNumber} pasará a Cancelada y ya no podrá recibirse mercancía contra ella.`}
           confirmLabel="Cancelar orden"
           isPending={cancelMutation.isPending}
+          error={cancelMutation.error}
           onConfirm={() => cancelMutation.mutate(cancelling)}
           onCancel={() => setCancelling(undefined)}
         />

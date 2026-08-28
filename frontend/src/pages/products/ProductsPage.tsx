@@ -5,7 +5,6 @@ import { listProducts, setProductActive } from "../../api/endpoints/products";
 import { queryKeys, queryPrefixes } from "../../api/queryClient";
 import { can } from "../../auth/permissions";
 import { useAuth } from "../../auth/useAuth";
-import { FormErrorMessage } from "../../components/form/Field";
 import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Pagination } from "../../components/ui/Pagination";
@@ -98,8 +97,6 @@ export function ProductsPage() {
         </div>
       </form>
 
-      <FormErrorMessage error={toggleMutation.error} />
-
       <AsyncBoundary
         isLoading={query.isPending}
         error={query.error}
@@ -181,6 +178,7 @@ export function ProductsPage() {
           }
           confirmLabel={toggling.active ? "Desactivar" : "Activar"}
           isPending={toggleMutation.isPending}
+          error={toggleMutation.error}
           onConfirm={() => toggleMutation.mutate(toggling)}
           onCancel={() => setToggling(undefined)}
         />

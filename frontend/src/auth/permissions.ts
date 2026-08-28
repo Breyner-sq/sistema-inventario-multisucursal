@@ -29,6 +29,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Compras", path: "/compras" },
   { label: "Ventas", path: "/ventas" },
   { label: "Transferencias", path: "/transferencias" },
+  { label: "Logística", path: "/logistica/rutas" },
   { label: "Sucursales", path: "/sucursales" },
   { label: "Usuarios", path: "/usuarios", roles: ["ADMIN"] },
 ];
@@ -78,4 +79,27 @@ export const canPurchases = {
 export const canSales = {
   /** Registrar una venta. */
   write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+};
+
+/**
+ * Acciones de transferencias por estado (docs/API_DESIGN.md, sección 6). Cada
+ * una exige además pertenecer a la sucursal correcta —origen o destino según
+ * la acción— salvo `ADMIN`; eso lo resuelve `canWriteInBranch`, no esta tabla.
+ */
+export const canTransfers = {
+  /** Solicitar: la origina la sucursal destino. */
+  request: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
+  /** Aprobar/rechazar: Gerente de la sucursal origen. */
+  approve: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
+  /** Despachar: Operador de la sucursal origen. */
+  dispatch: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+  /** Recibir: Operador de la sucursal destino. */
+  receive: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+  /** Tratar un faltante: Gerente de origen o destino. */
+  treatDiscrepancy: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
+};
+
+export const canLogistics = {
+  /** Clasificar/reclasificar rutas. */
+  writeRoutes: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
 };
