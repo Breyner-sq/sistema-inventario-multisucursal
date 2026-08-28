@@ -7,6 +7,7 @@ import { ProductsPage } from "./pages/products/ProductsPage";
 import { UnitsOfMeasurePage } from "./pages/products/UnitsOfMeasurePage";
 import { InventoryPage } from "./pages/inventory/InventoryPage";
 import { MovementsPage } from "./pages/inventory/MovementsPage";
+import { StockAlertsPage } from "./pages/inventory/StockAlertsPage";
 import { PurchaseOrdersPage } from "./pages/purchases/PurchaseOrdersPage";
 import { NewPurchaseOrderPage } from "./pages/purchases/NewPurchaseOrderPage";
 import { PurchaseOrderDetailPage } from "./pages/purchases/PurchaseOrderDetailPage";
@@ -20,7 +21,8 @@ import { RoutesPage } from "./pages/logistics/RoutesPage";
 import { LogisticsCompliancePage } from "./pages/logistics/LogisticsCompliancePage";
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { BranchComparisonPage } from "./pages/dashboard/BranchComparisonPage";
-import { ForbiddenPage, HomePage, NotFoundPage, PlaceholderPage } from "./pages/SimplePages";
+import { UsersPage } from "./pages/users/UsersPage";
+import { ForbiddenPage, HomePage, NotFoundPage } from "./pages/SimplePages";
 
 /**
  * Mapa de rutas. Todo lo que cuelga de `ProtectedRoute` exige sesión; lo que
@@ -39,6 +41,7 @@ export default function App() {
           <Route path="/sucursales" element={<BranchesPage />} />
           <Route path="/inventario" element={<InventoryPage />} />
           <Route path="/inventario/movimientos" element={<MovementsPage />} />
+          <Route path="/inventario/alertas" element={<StockAlertsPage />} />
           <Route path="/productos" element={<ProductsPage />} />
           <Route path="/productos/unidades" element={<UnitsOfMeasurePage />} />
           <Route path="/compras" element={<PurchaseOrdersPage />} />
@@ -64,7 +67,7 @@ export default function App() {
           </Route>
 
           <Route element={<RequireRole roles={["ADMIN"]} />}>
-            <Route path="/usuarios" element={<PlaceholderPage title="Usuarios" />} />
+            <Route path="/usuarios" element={<UsersPage />} />
           </Route>
 
           {/* RF-035: la comparativa entre sucursales es exclusivamente para

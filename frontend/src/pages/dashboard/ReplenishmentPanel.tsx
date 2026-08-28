@@ -15,7 +15,10 @@ export function ReplenishmentPanel({ branchId }: { branchId: string }) {
     <section className="panel dashboard-panel">
       <div className="page__header">
         <h2>Reabastecimiento</h2>
-        <Link to={`/inventario?branchId=${branchId}`}>Ver inventario</Link>
+        <div className="page__actions">
+          <Link to={`/inventario?branchId=${branchId}`}>Ver inventario</Link>
+          <Link to={`/inventario/alertas?branchId=${branchId}`}>Ver alertas</Link>
+        </div>
       </div>
       <AsyncBoundary
         isLoading={query.isPending}

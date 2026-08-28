@@ -53,6 +53,7 @@ com/inventario/multisucursal/purchases/ReceiptItemRequest.class
 com/inventario/multisucursal/products/UnitOfMeasureService.class
 com/inventario/multisucursal/sales/SaleService.class
 com/inventario/multisucursal/common/web/JsonAccessDeniedHandler.class
+com/inventario/multisucursal/inventory/StockAlertRepository.class
 com/inventario/multisucursal/dashboard/InventoryDemandResponse.class
 com/inventario/multisucursal/purchases/PurchaseReceiptResponse.class
 com/inventario/multisucursal/products/ProductUnitResponse.class
@@ -72,6 +73,7 @@ com/inventario/multisucursal/auth/AuthController.class
 com/inventario/multisucursal/purchases/PurchaseOrderResponse.class
 com/inventario/multisucursal/common/audit/Auditable.class
 com/inventario/multisucursal/InventarioApplication.class
+com/inventario/multisucursal/inventory/StockAlertService.class
 com/inventario/multisucursal/inventory/InventoryMovement.class
 com/inventario/multisucursal/auth/JwtAuthenticationFilter.class
 com/inventario/multisucursal/suppliers/SupplierService.class
@@ -95,6 +97,7 @@ com/inventario/multisucursal/sales/SaleItem.class
 com/inventario/multisucursal/branches/BranchRepository.class
 com/inventario/multisucursal/inventory/InventoryService.class
 com/inventario/multisucursal/dashboard/DashboardController.class
+com/inventario/multisucursal/inventory/StockAlert.class
 com/inventario/multisucursal/transfers/ApproveTransferRequest.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse$RouteCompliance.class
 com/inventario/multisucursal/products/SetPriceRequest.class
@@ -144,6 +147,7 @@ com/inventario/multisucursal/products/ProductUnit.class
 com/inventario/multisucursal/common/web/PageResponse.class
 com/inventario/multisucursal/users/UserResponse.class
 com/inventario/multisucursal/products/ProductRepository.class
+com/inventario/multisucursal/inventory/StockAlertResponse.class
 com/inventario/multisucursal/transfers/TransferItem.class
 com/inventario/multisucursal/sales/SaleStatus.class
 com/inventario/multisucursal/auth/JpaAuditingConfig.class
@@ -159,6 +163,7 @@ com/inventario/multisucursal/suppliers/Supplier.class
 com/inventario/multisucursal/auth/UserSummaryResponse.class
 com/inventario/multisucursal/users/RoleResponse.class
 com/inventario/multisucursal/inventory/InventoryMovementController.class
+com/inventario/multisucursal/inventory/StockAlertStatus.class
 com/inventario/multisucursal/auth/JwtService.class
 com/inventario/multisucursal/sales/SaleRepository.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse.class
@@ -173,11 +178,14 @@ com/inventario/multisucursal/branches/BranchController.class
 com/inventario/multisucursal/auth/LoginRequest.class
 com/inventario/multisucursal/dashboard/ActiveTransfersResponse.class
 com/inventario/multisucursal/sales/SaleResponse.class
+com/inventario/multisucursal/inventory/StockAlertController.class
 com/inventario/multisucursal/users/UpdateUserRequest.class
 com/inventario/multisucursal/purchases/PurchaseOrderController.class
 com/inventario/multisucursal/transfers/DiscrepancyTreatmentResponse.class
 com/inventario/multisucursal/dashboard/BranchComparisonResponse$BranchMetrics.class
+com/inventario/multisucursal/users/DeactivateUserRequest.class
 com/inventario/multisucursal/common/exception/ResourceConflictException.class
+com/inventario/multisucursal/inventory/StockAlertRow.class
 com/inventario/multisucursal/logistics/RouteService.class
 com/inventario/multisucursal/common/exception/BusinessRuleViolationException.class
 com/inventario/multisucursal/sales/ProductDemand.class

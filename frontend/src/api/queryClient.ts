@@ -41,10 +41,13 @@ export function createQueryClient(): QueryClient {
  */
 export const queryKeys = {
   branches: (params?: unknown) => ["branches", params ?? {}] as const,
+  users: (params?: unknown) => ["users", params ?? {}] as const,
+  roles: () => ["roles"] as const,
   products: (params?: unknown) => ["products", params ?? {}] as const,
   productUnits: (productId: string) => ["product-units", productId] as const,
   unitsOfMeasure: () => ["units-of-measure"] as const,
   inventoryMovements: (params?: unknown) => ["inventory-movements", params ?? {}] as const,
+  stockAlerts: (params?: unknown) => ["stock-alerts", params ?? {}] as const,
   suppliers: (params?: unknown) => ["suppliers", params ?? {}] as const,
   purchaseOrders: (params?: unknown) => ["purchase-orders", params ?? {}] as const,
   purchaseOrder: (id: string) => ["purchase-orders", id] as const,
@@ -74,9 +77,12 @@ export const queryKeys = {
  * string suelto en cada pantalla.
  */
 export const queryPrefixes = {
+  branches: ["branches"] as const,
+  users: ["users"] as const,
   products: ["products"] as const,
   inventory: ["inventory"] as const,
   inventoryMovements: ["inventory-movements"] as const,
+  stockAlerts: ["stock-alerts"] as const,
   purchaseOrders: ["purchase-orders"] as const,
   sales: ["sales"] as const,
   transfers: ["transfers"] as const,

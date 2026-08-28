@@ -26,6 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", path: "/" },
   { label: "Dashboard", path: "/dashboard" },
   { label: "Inventario", path: "/inventario" },
+  { label: "Alertas", path: "/inventario/alertas" },
   { label: "Productos", path: "/productos" },
   { label: "Compras", path: "/compras" },
   { label: "Ventas", path: "/ventas" },
@@ -71,6 +72,21 @@ export function canWriteInBranch(user: { role: Role; branchId: string | null } |
   if (user.role === "ADMIN") return true;
   return user.branchId === branchId;
 }
+
+/**
+ * Todo el módulo de usuarios —lectura y escritura— es exclusivo de ADMIN
+ * (docs/API_DESIGN.md, sección 7.2, UC-14). La ruta `/usuarios` ya está
+ * protegida con `RequireRole`; esto solo hace explícito el mismo criterio
+ * dentro del propio componente, igual que el resto de módulos.
+ */
+export const canUsers = {
+  write: (role: Role | undefined): boolean => role === "ADMIN",
+};
+
+/** Lectura de sucursales abierta a cualquier rol (RF-003); alta exclusiva de ADMIN (UC-15). */
+export const canBranches = {
+  write: (role: Role | undefined): boolean => role === "ADMIN",
+};
 
 export const canPurchases = {
   /** Crear orden, cancelarla y registrar recepción. */

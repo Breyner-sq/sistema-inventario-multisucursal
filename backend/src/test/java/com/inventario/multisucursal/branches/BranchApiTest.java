@@ -1,6 +1,7 @@
 package com.inventario.multisucursal.branches;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inventario.multisucursal.users.DeactivateUserRequest;
 import com.inventario.multisucursal.users.RoleCode;
 import com.inventario.multisucursal.users.User;
 import com.inventario.multisucursal.users.UserRepository;
@@ -182,14 +183,45 @@ class BranchApiTest {
 
     @Test
     void canDeactivateBranchOnceItsActiveUsersAreDeactivated() {
-        postAction("/api/v1/users/" + findUserId("manager@test.local") + "/deactivate", adminToken, String.class);
-        postAction("/api/v1/users/" + findUserId("operator@test.local") + "/deactivate", adminToken, String.class);
+        post("/api/v1/users/" + findUserId("manager@test.local") + "/deactivate", new DeactivateUserRequest("Prueba"), adminToken, String.class);
+        post("/api/v1/users/" + findUserId("operator@test.local") + "/deactivate", new DeactivateUserRequest("Prueba"), adminToken, String.class);
 
         ResponseEntity<BranchResponse> response = postAction(
                 "/api/v1/branches/" + branchA.getId() + "/deactivate", adminToken, BranchResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().active()).isFalse();
+    }
+
+    // ---- Eliminación ----
+
+    @Test
+    void adminCanDeleteBranchWithNoAssociatedData() {
+        BranchResponse created = post("/api/v1/branches", new CreateBranchRequest("SUC-VACIA", "Sin datos", null), adminToken, BranchResponse.class)
+                .getBody();
+        Long branchId = Long.valueOf(created.id());
+
+        ResponseEntity<Void> response = delete("/api/v1/branches/" + branchId, adminToken, Void.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(branchRepository.findById(branchId)).isEmpty();
+    }
+
+    @Test
+    void cannotDeleteBranchWithAssociatedUsers() {
+        // branchA tiene un Gerente y un Operador asignados desde setUp().
+        ResponseEntity<String> response = delete("/api/v1/branches/" + branchA.getId(), adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).contains("\"code\":\"SUCURSAL_CON_DATOS_ASOCIADOS\"");
+        assertThat(branchRepository.findById(branchA.getId())).isPresent();
+    }
+
+    @Test
+    void operatorCannotDeleteBranch() {
+        ResponseEntity<String> response = delete("/api/v1/branches/" + branchB.getId(), operatorToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     // ---- Sucursal inexistente ----
@@ -203,6 +235,8 @@ class BranchApiTest {
         assertThat(patch("/api/v1/branches/" + missingId, new UpdateBranchRequest("X", null), adminToken, String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(postAction("/api/v1/branches/" + missingId + "/deactivate", adminToken, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(delete("/api/v1/branches/" + missingId, adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -238,6 +272,10 @@ class BranchApiTest {
 
     private <T> ResponseEntity<T> postAction(String path, String token, Class<T> responseType) {
         return restTemplate.exchange(path, HttpMethod.POST, new HttpEntity<>(null, authHeaders(token)), responseType);
+    }
+
+    private <T> ResponseEntity<T> delete(String path, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.DELETE, new HttpEntity<>(authHeaders(token)), responseType);
     }
 
     private <T> ResponseEntity<T> patch(String path, Object requestBody, String token, Class<T> responseType) {

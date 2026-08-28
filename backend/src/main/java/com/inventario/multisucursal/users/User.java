@@ -46,6 +46,9 @@ public class User extends Auditable {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
     protected User() {
         // JPA
     }
@@ -66,10 +69,14 @@ public class User extends Auditable {
 
     public void activate() {
         this.active = true;
+        // El motivo describe la desactivación que se está cerrando; una vez
+        // reactivado ya no aplica y no debe seguir mostrándose (UC-14).
+        this.deactivationReason = null;
     }
 
-    public void deactivate() {
+    public void deactivate(String reason) {
         this.active = false;
+        this.deactivationReason = reason;
     }
 
     public Long getId() {
@@ -98,5 +105,9 @@ public class User extends Auditable {
 
     public boolean isActive() {
         return active;
+    }
+
+    public String getDeactivationReason() {
+        return deactivationReason;
     }
 }

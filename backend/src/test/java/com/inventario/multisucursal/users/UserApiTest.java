@@ -28,10 +28,14 @@ import java.net.http.HttpResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * UC-14 (docs/USE_CASES.md): crear, consultar, editar y activar/desactivar
- * usuarios asignando rol y sucursal. Cubre exactamente lo pedido: creación
- * válida, duplicados, permisos (ADMIN-only, ni siquiera lectura para otros
- * roles), asociación usuario-sucursal (crear y reasignar), y operaciones
+ * UC-14 (docs/USE_CASES.md): crear, consultar, editar, activar/desactivar y
+ * eliminar usuarios asignando rol y sucursal. Cubre exactamente lo pedido:
+ * creación válida, duplicados, permisos (ADMIN-only, ni siquiera lectura
+ * para otros roles), asociación usuario-sucursal (crear y reasignar),
+ * desactivación con motivo obligatorio (que se limpia al reactivar),
+ * bloqueo de autogestión (un ADMIN no puede desactivarse ni eliminarse a sí
+ * mismo), eliminación real solo cuando no hay historial asociado (se apoya
+ * en las FK `ON DELETE RESTRICT` ya declaradas en el esquema), y operaciones
  * sobre usuario inexistente.
  *
  * <p>{@code patch(...)} usa {@link HttpClient} (JDK) en vez de
@@ -215,12 +219,61 @@ class UserApiTest {
     void adminCanDeactivateAndReactivateUser() {
         Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
 
-        ResponseEntity<UserResponse> deactivated = postAction("/api/v1/users/" + userId + "/deactivate", adminToken, UserResponse.class);
+        ResponseEntity<UserResponse> deactivated =
+                post("/api/v1/users/" + userId + "/deactivate", new DeactivateUserRequest("Renuncia"), adminToken, UserResponse.class);
         assertThat(deactivated.getBody().active()).isFalse();
+        assertThat(deactivated.getBody().deactivationReason()).isEqualTo("Renuncia");
 
         ResponseEntity<UserResponse> reactivated = postAction("/api/v1/users/" + userId + "/activate", adminToken, UserResponse.class);
         assertThat(reactivated.getBody().active()).isTrue();
+        // El motivo describía la desactivación anterior; reactivar lo limpia,
+        // no debe seguir mostrándose como si aplicara todavía.
+        assertThat(reactivated.getBody().deactivationReason()).isNull();
     }
+
+    @Test
+    void deactivatingWithoutReasonIsRejected() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<String> response =
+                post("/api/v1/users/" + userId + "/deactivate", new DeactivateUserRequest(" "), adminToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+    }
+
+    @Test
+    void adminCannotDeactivateOrDeleteOwnAccount() {
+        Long adminId = userRepository.findByEmail("admin@test.local").orElseThrow().getId();
+
+        ResponseEntity<String> deactivateResponse =
+                post("/api/v1/users/" + adminId + "/deactivate", new DeactivateUserRequest("Motivo"), adminToken, String.class);
+        assertThat(deactivateResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(deactivateResponse.getBody()).contains("\"code\":\"NO_AUTOGESTION\"");
+
+        ResponseEntity<String> deleteResponse = delete("/api/v1/users/" + adminId, adminToken, String.class);
+        assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(deleteResponse.getBody()).contains("\"code\":\"NO_AUTOGESTION\"");
+    }
+
+    // ---- Eliminación ----
+
+    @Test
+    void adminCanDeleteUserWithNoHistory() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<Void> response = delete("/api/v1/users/" + userId, adminToken, Void.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(userRepository.findById(userId)).isEmpty();
+    }
+
+    // No hay una prueba H2 equivalente a "no se puede eliminar un usuario con
+    // historial asociado": esa protección depende íntegramente de las FK
+    // `ON DELETE RESTRICT` que declara el esquema real de PostgreSQL, y
+    // Hibernate no las genera en el `create-drop` de pruebas porque el modelo
+    // no usa asociaciones JPA (ver UserService.delete). Verificada en vivo
+    // contra PostgreSQL real, igual que FlywayMigrationIntegrationTest.
 
     // ---- Usuario inexistente ----
 
@@ -232,7 +285,9 @@ class UserApiTest {
                 .isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(patch("/api/v1/users/" + missingId, new UpdateUserRequest("X", RoleCode.OPERATOR, branchA.getId()), adminToken, String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(postAction("/api/v1/users/" + missingId + "/deactivate", adminToken, String.class).getStatusCode())
+        assertThat(post("/api/v1/users/" + missingId + "/deactivate", new DeactivateUserRequest("Motivo"), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(delete("/api/v1/users/" + missingId, adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -250,6 +305,10 @@ class UserApiTest {
 
     private <T> ResponseEntity<T> postAction(String path, String token, Class<T> responseType) {
         return restTemplate.exchange(path, HttpMethod.POST, new HttpEntity<>(null, authHeaders(token)), responseType);
+    }
+
+    private <T> ResponseEntity<T> delete(String path, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.DELETE, new HttpEntity<>(authHeaders(token)), responseType);
     }
 
     private <T> ResponseEntity<T> patch(String path, Object requestBody, String token, Class<T> responseType) {

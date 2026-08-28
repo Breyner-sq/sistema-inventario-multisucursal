@@ -62,6 +62,51 @@ export interface Branch {
   active: boolean;
 }
 
+export interface CreateBranchRequest {
+  code: string;
+  name: string;
+  location?: string | null;
+}
+
+/** `code` no se edita (clave de negocio inmutable, docs/API_DESIGN.md sección 7.3). */
+export interface UpdateBranchRequest {
+  name: string;
+  location?: string | null;
+}
+
+// ---- Usuarios y roles (docs/API_DESIGN.md, sección 7.2) ----
+
+/** Forma de gestión administrativa (UC-14) — distinta de `UserSummary`, el perfil de la sesión actual. */
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  /** `null` para ADMIN: alcance global, sin sucursal fija. */
+  branchId: string | null;
+  active: boolean;
+  /** Motivo de la desactivación vigente; `null` si está activo o nunca fue desactivado. */
+  deactivationReason: string | null;
+}
+
+export interface CreateUserRequest {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+  /** Obligatorio salvo para ADMIN, que no debe tener sucursal (backend: `ADMIN_SIN_SUCURSAL`/`SUCURSAL_REQUERIDA`). */
+  branchId?: number | null;
+}
+
+export interface DeactivateUserRequest {
+  reason: string;
+}
+
+export interface RoleInfo {
+  code: Role;
+  name: string;
+}
+
 // ---- Productos y unidades de medida (docs/API_DESIGN.md, sección 7.4) ----
 
 export interface Product {
@@ -158,6 +203,22 @@ export interface InventoryAdjustmentRequest {
   reason?: MovementReason | null;
   quantity: number;
   notes: string;
+}
+
+/** Alertas de stock mínimo (BR-010, UC-16, RF-010/RF-036 — funcionalidad adicional). */
+export type StockAlertStatus = "ACTIVE" | "RESOLVED";
+
+export interface StockAlert {
+  id: string;
+  branchId: string;
+  productId: string;
+  sku: string;
+  name: string;
+  quantityOnHand: number;
+  minimumStock: number;
+  status: StockAlertStatus;
+  triggeredAt: string;
+  resolvedAt: string | null;
 }
 
 // ---- Proveedores (docs/API_DESIGN.md, sección 7.6) ----

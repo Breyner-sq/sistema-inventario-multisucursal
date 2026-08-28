@@ -17,6 +17,7 @@ import com.inventario.multisucursal.inventory.InventoryMovementRepository;
 import com.inventario.multisucursal.inventory.InventoryRepository;
 import com.inventario.multisucursal.inventory.MovementDirection;
 import com.inventario.multisucursal.inventory.MovementReason;
+import com.inventario.multisucursal.inventory.StockAlertService;
 import com.inventario.multisucursal.products.Price;
 import com.inventario.multisucursal.products.PriceList;
 import com.inventario.multisucursal.products.PriceListRepository;
@@ -70,6 +71,7 @@ public class SaleService {
     private final InventoryMovementRepository movementRepository;
     private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
+    private final StockAlertService stockAlertService;
 
     public SaleService(
             SaleRepository saleRepository,
@@ -82,7 +84,8 @@ public class SaleService {
             InventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
             DomainEventPublisher eventPublisher,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            StockAlertService stockAlertService) {
         this.saleRepository = saleRepository;
         this.saleItemRepository = saleItemRepository;
         this.branchRepository = branchRepository;
@@ -94,6 +97,7 @@ public class SaleService {
         this.movementRepository = movementRepository;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
+        this.stockAlertService = stockAlertService;
     }
 
     @Transactional
@@ -224,6 +228,7 @@ public class SaleService {
             BigDecimal newQuantity = available.subtract(quantityBase);
             int updated = inventoryRepository.applyQuantity(inventory.getId(), inventory.getVersion(), newQuantity, Instant.now());
             if (updated == 1) {
+                stockAlertService.evaluate(inventory.getId(), branchId, productId, newQuantity, inventory.getMinimumStock());
                 return;
             }
         }

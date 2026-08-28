@@ -112,6 +112,9 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Validación:** cada operación que modifica `Inventory.quantity_on_hand` (venta, retiro, ajuste, recepción de transferencia) evalúa, en la misma transacción, si el nuevo valor cruza el umbral `minimum_stock` en cualquier dirección, y crea o resuelve la `StockAlert` correspondiente. El índice único parcial `UNIQUE (inventory_id) WHERE status = 'ACTIVE'` (`docs/DOMAIN_MODEL.md`, 2.9) evita alertas activas duplicadas incluso ante una condición de carrera.
 - **Error esperado:** no aplica error — es un efecto colateral automático, no una operación que el usuario invoque directamente y pueda rechazarse.
 - **Pruebas necesarias:** un retiro que deja el stock justo en el mínimo genera la alerta; un ingreso posterior que sube el stock por encima del mínimo resuelve la alerta activa; dos retiros concurrentes que cruzan el umbral casi simultáneamente generan una única alerta activa, no dos.
+- **Implementado (funcionalidad adicional elegida, RF-036) — ver `docs/adr/ADR-015-alertas-de-stock-minimo.md` para el diseño completo.** Dos precisiones sobre la validación anterior:
+  1. La deduplicación no depende de capturar una violación del índice único **dentro** de la misma transacción que la venta/compra/transferencia: PostgreSQL aborta toda la transacción en curso ante cualquier statement fallido (verificado empíricamente), así que un `INSERT` que chocara contra el índice único dejaría inservible la transacción de negocio que lo rodea. En su lugar, `StockAlertService.evaluate` comprueba primero si ya existe una alerta activa (`existsByInventoryIdAndStatus`) antes de insertar — mismo patrón que `existsByEmail`/`existsByCode` en `users`/`branches`. Esa comprobación es suficiente en la práctica porque todo llamador ya serializa sus escrituras sobre el mismo `Inventory` vía bloqueo optimista por `version`; el índice único parcial queda como respaldo de última línea a nivel de base de datos, no como mecanismo de recuperación activo.
+  2. **Un fallo al evaluar o persistir la alerta nunca revierte la operación de inventario que la disparó** (venta, compra, transferencia, ajuste ya confirmados): `StockAlertService.evaluate` captura cualquier excepción inesperada y solo la registra en el log, sin propagarla — verificado con un doble de prueba que fuerza el fallo (`StockAlertNotificationFailureTest`). El envío de la señal SSE (`stock-alert.triggered`/`resolved`) hereda la misma garantía por construcción: se emite después del commit (ADR-007), así que para cuando pudiera fallar el envío la operación ya quedó confirmada.
 
 ### BR-011 — Soporte de múltiples unidades de medida con conversión **[Origen]**
 
@@ -380,6 +383,32 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Validación:** por cada sucursal activa se calculan, con las mismas consultas agregadas de BR-039/BR-041/BR-042 (una vez por sucursal, nunca cargando todas las sucursales en una sola consulta sin agrupar): ventas del mes en curso, conteo de transferencias activas que la involucran y conteo de productos bajo el umbral de reabastecimiento. No es un promedio ni un ranking adicional — son las mismas cifras que cada sucursal ya expone individualmente, solo yuxtapuestas para comparar.
 - **Error esperado:** 403 `ROL_NO_AUTORIZADO` para `OPERATOR`.
 - **Pruebas necesarias:** `OPERATOR` recibe 403; `MANAGER`/`ADMIN` reciben una fila por cada sucursal activa; una sucursal sin ventas ni transferencias aparece con ceros, no se omite.
+
+---
+
+### BR-044 — Desactivar un usuario exige motivo, visible mientras siga desactivado **[Decisión]**
+
+- **Descripción:** UC-14 pide que desactivar a un usuario registre por qué, y que ese motivo se muestre mientras la cuenta siga inactiva. `POST /users/{id}/deactivate` pasa a exigir `{ reason }` (`@NotBlank`, máx. 500 caracteres) en vez de no aceptar cuerpo. El motivo se limpia al reactivar (`activate()`): describe la desactivación que se está cerrando, no tiene sentido que sobreviva a ella.
+- **Entidades afectadas:** `users.deactivation_reason` (columna nueva, migración V26, nula para usuarios activos o nunca desactivados).
+- **Validación:** `reason` en blanco o ausente → 400 `VALIDATION_ERROR`, igual que cualquier otro campo obligatorio de la API.
+- **Pruebas necesarias:** desactivar sin motivo se rechaza; desactivar con motivo lo persiste y lo expone en `UserResponse.deactivationReason`; reactivar lo limpia.
+
+### BR-045 — Un ADMIN no puede desactivarse ni eliminarse a sí mismo **[Decisión]**
+
+- **Descripción:** sin esta regla, un ADMIN podría quitarse a sí mismo el único acceso administrativo disponible (si es el único `ADMIN` activo) sin que ningún otro rol pueda revertirlo. `UserService.deactivate`/`UserService.delete` comparan el id objetivo contra `AuthenticatedUser.userId()` (el principal ya resuelto desde el JWT, sin volver a consultar la base) antes de cualquier otra validación.
+- **Entidades afectadas:** ninguna nueva.
+- **Error esperado:** 422 `NO_AUTOGESTION` cuando el id objetivo coincide con el del usuario autenticado.
+- **Pruebas necesarias:** un ADMIN intentando desactivarse o eliminarse a sí mismo recibe 422; sobre cualquier otro usuario, ambas operaciones proceden con normalidad.
+
+### BR-046 — Eliminar sucursal o usuario es real y no reversible, solo sin datos asociados **[Decisión]**
+
+- **Descripción:** a diferencia de activar/desactivar (reversible, UC-14/UC-15), `DELETE /branches/{id}` y `DELETE /users/{id}` borran la fila. Ambos módulos ya son punto de referencia desde `inventory`, `purchases`, `sales`, `transfers`, `logistics`/`price_list` (sucursal) y `inventory_movement`/`purchase_order`/`sale`/`transfer` (usuario) con FK `ON DELETE RESTRICT` (Flyway) — la base de datos ya impide huérfanos aunque la aplicación no comprobara nada.
+  - Para sucursales, `BranchService.delete` además comprueba explícitamente `users.branch_id` (cualquier usuario asignado, activo o no) **antes** de intentar el `DELETE`, porque `users` ya es una dependencia legítima de `branches` (igual que en `deactivate`) y así el caso más común queda cubierto con una consulta directa, sin esperar a la excepción de la base de datos.
+  - El resto de referencias posibles (inventario, compras, ventas, transferencias, rutas de una sucursal; movimientos, compras, ventas, transferencias de un usuario) **no** se comprueban con una consulta explícita: hacerlo obligaría a `branches`/`users` a depender de módulos que hoy dependen de ellos, invirtiendo el grafo de dependencias unidireccional (`docs/ARCHITECTURE.md`, sección 4). Se confía en la FK `ON DELETE RESTRICT` ya declarada: PostgreSQL rechaza el `DELETE` y el servicio traduce la `DataIntegrityViolationException` resultante a un conflicto legible.
+- **Entidades afectadas:** ninguna nueva.
+- **Error esperado:** 409 `SUCURSAL_CON_DATOS_ASOCIADOS` / `USUARIO_CON_DATOS_ASOCIADOS` cuando hay cualquier dato asociado; 204 sin contenido cuando la eliminación procede.
+- **Validación:** la vía de la FK **solo se ejerce contra PostgreSQL real** — Hibernate no genera esas restricciones en el esquema de pruebas H2 (`ddl-auto=create-drop`) porque el modelo no usa asociaciones JPA (`docs/DECISIONS.md`), así que esa parte se verificó en vivo contra Docker Compose, no por la suite automatizada, igual que `FlywayMigrationIntegrationTest`.
+- **Pruebas necesarias:** eliminar sin datos asociados devuelve 204 y el recurso deja de existir; eliminar una sucursal con usuarios asignados devuelve 409 (H2); eliminar sobre un id inexistente devuelve 404; el caso de un usuario con historial de movimientos/compras/ventas/transferencias, y el de una sucursal con inventario/compras/ventas/transferencias/rutas pero sin usuarios, se verificaron en vivo contra PostgreSQL real (ver nota de validación).
 
 ---
 

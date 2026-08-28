@@ -13,6 +13,8 @@
 /app/src/test/java/com/inventario/multisucursal/inventory/InventoryAdjustmentApiTest.java
 /app/src/test/java/com/inventario/multisucursal/inventory/InventoryAdjustmentRollbackTest.java
 /app/src/test/java/com/inventario/multisucursal/inventory/InventoryConcurrencyTest.java
+/app/src/test/java/com/inventario/multisucursal/inventory/StockAlertApiTest.java
+/app/src/test/java/com/inventario/multisucursal/inventory/StockAlertNotificationFailureTest.java
 /app/src/test/java/com/inventario/multisucursal/logistics/RouteApiTest.java
 /app/src/test/java/com/inventario/multisucursal/products/PriceListApiTest.java
 /app/src/test/java/com/inventario/multisucursal/products/ProductApiTest.java

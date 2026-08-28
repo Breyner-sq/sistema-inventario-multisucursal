@@ -9,11 +9,14 @@ import type {
   Product,
   ProductUnit,
   PurchaseOrder,
+  RoleInfo,
   Route,
   Sale,
+  StockAlert,
   Supplier,
   Transfer,
   UnitOfMeasure,
+  User,
 } from "../types/api";
 
 /** Datos de catálogo compartidos por las pruebas de productos e inventario. */
@@ -162,6 +165,26 @@ export function transfer(overrides: Partial<Transfer> = {}): Transfer {
 
 export const ROUTES: Route[] = [{ id: "1", originBranchId: "1", destinationBranchId: "2", classification: "TIME" }];
 
+export const ROLES: RoleInfo[] = [
+  { code: "ADMIN", name: "Administrador general" },
+  { code: "MANAGER", name: "Gerente de sucursal" },
+  { code: "OPERATOR", name: "Operador de inventario" },
+];
+
+export const USERS: User[] = [
+  { id: "1", name: "Admin General", email: "admin@inventario.local", role: "ADMIN", branchId: null, active: true, deactivationReason: null },
+  { id: "2", name: "Gerente Centro", email: "gerente.centro@inventario.local", role: "MANAGER", branchId: "1", active: true, deactivationReason: null },
+  {
+    id: "3",
+    name: "Operador Centro",
+    email: "operador.centro@inventario.local",
+    role: "OPERATOR",
+    branchId: "1",
+    active: false,
+    deactivationReason: "Renuncia",
+  },
+];
+
 function complianceMetrics(overrides: Partial<ComplianceMetrics> = {}): ComplianceMetrics {
   return {
     dispatched: 4,
@@ -259,6 +282,22 @@ export function replenishmentDashboard(overrides: Partial<import("../types/api")
   };
 }
 
+export function stockAlert(overrides: Partial<StockAlert> = {}): StockAlert {
+  return {
+    id: "900",
+    branchId: "1",
+    productId: "10",
+    sku: "SKU-001",
+    name: "Cemento gris",
+    quantityOnHand: 5,
+    minimumStock: 10,
+    status: "ACTIVE",
+    triggeredAt: "2026-08-27T10:00:00Z",
+    resolvedAt: null,
+    ...overrides,
+  };
+}
+
 export function branchComparison(overrides: Partial<import("../types/api").BranchComparisonResponse> = {}) {
   return {
     branches: [
@@ -287,6 +326,7 @@ export function page<T>(content: T[], overrides: Partial<{ page: number; size: n
  */
 export function catalogResponse(url: string): Response | undefined {
   if (url.includes("/branches")) return jsonResponse(200, page(BRANCHES));
+  if (url.includes("/roles")) return jsonResponse(200, ROLES);
   if (url.includes("/units-of-measure")) return jsonResponse(200, UNITS);
   if (/\/products\/\d+\/units/.test(url)) return jsonResponse(200, PRODUCT_UNITS);
   if (url.includes("/suppliers")) return jsonResponse(200, page(SUPPLIERS));

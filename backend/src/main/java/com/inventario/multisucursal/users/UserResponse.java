@@ -6,7 +6,8 @@ package com.inventario.multisucursal.users;
  * expone {@code active} — aquí sí importa, UC-14 necesita listar quién está
  * activo/inactivo).
  */
-public record UserResponse(String id, String name, String email, String role, String branchId, boolean active) {
+public record UserResponse(
+        String id, String name, String email, String role, String branchId, boolean active, String deactivationReason) {
 
     public static UserResponse from(User user) {
         return new UserResponse(
@@ -15,6 +16,7 @@ public record UserResponse(String id, String name, String email, String role, St
                 user.getEmail(),
                 user.getRoleCode().name(),
                 user.getBranchId() != null ? String.valueOf(user.getBranchId()) : null,
-                user.isActive());
+                user.isActive(),
+                user.getDeactivationReason());
     }
 }

@@ -1,12 +1,15 @@
 package com.inventario.multisucursal.users;
 
+import com.inventario.multisucursal.auth.AuthenticatedUser;
 import com.inventario.multisucursal.branches.Branch;
 import com.inventario.multisucursal.branches.BranchRepository;
 import com.inventario.multisucursal.common.exception.BusinessRuleViolationException;
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
 import com.inventario.multisucursal.common.web.PageResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,10 +81,50 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse deactivate(Long id) {
+    public UserResponse deactivate(Long id, String reason) {
+        requireNotSelf(id, "desactivar");
         User user = findOrThrow(id);
-        user.deactivate();
+        user.deactivate(reason);
         return UserResponse.from(user);
+    }
+
+    /**
+     * Eliminación real (no reversible), a diferencia de activar/desactivar.
+     * Se apoya en las FK {@code ON DELETE RESTRICT} hacia {@code users}
+     * (movimientos, compras, ventas, transferencias) que ya declara el
+     * esquema: si el usuario tiene cualquier historial asociado, PostgreSQL
+     * rechaza el `DELETE` y se traduce a un conflicto legible en vez de
+     * dejar que la excepción cruda llegue al cliente.
+     *
+     * <p>No hay una comprobación explícita equivalente aquí porque
+     * {@code users} no depende de {@code inventory}/{@code purchases}/
+     * {@code sales}/{@code transfers} (y no debe empezar a hacerlo solo para
+     * esto — invertiría el grafo de dependencias, docs/ARCHITECTURE.md
+     * sección 4): la única vía de protección es la FK. <b>Por eso mismo solo
+     * se ejerce contra PostgreSQL real</b> (Hibernate no genera esas FK en el
+     * esquema de pruebas H2, el modelo no usa asociaciones JPA) — verificado
+     * en vivo, no por la suite basada en H2, igual que
+     * {@code FlywayMigrationIntegrationTest}.
+     */
+    @Transactional
+    public void delete(Long id) {
+        requireNotSelf(id, "eliminar");
+        User user = findOrThrow(id);
+        try {
+            userRepository.delete(user);
+            userRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw new ResourceConflictException(
+                    "USUARIO_CON_DATOS_ASOCIADOS",
+                    "No se puede eliminar el usuario: tiene movimientos, compras, ventas o transferencias asociadas. Desactívalo en su lugar.");
+        }
+    }
+
+    private void requireNotSelf(Long targetId, String action) {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof AuthenticatedUser current && current.userId().equals(targetId)) {
+            throw new BusinessRuleViolationException("NO_AUTOGESTION", "No puedes " + action + " tu propia cuenta.");
+        }
     }
 
     private void validateRoleBranchConsistency(RoleCode role, Long branchId) {

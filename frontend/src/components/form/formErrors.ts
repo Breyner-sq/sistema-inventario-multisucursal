@@ -23,6 +23,11 @@ const FIELD_BY_CODE: Record<string, string> = {
   STOCK_INSUFICIENTE: "quantity",
   NOTES_REQUERIDO: "notes",
   MOTIVO_INCOMPATIBLE_CON_DIRECCION: "reason",
+  CODIGO_YA_EXISTE: "code",
+  EMAIL_YA_EXISTE: "email",
+  ADMIN_SIN_SUCURSAL: "branchId",
+  SUCURSAL_REQUERIDA: "branchId",
+  SUCURSAL_INACTIVA: "branchId",
 };
 
 export function toFormErrors(error: unknown): FormErrors {

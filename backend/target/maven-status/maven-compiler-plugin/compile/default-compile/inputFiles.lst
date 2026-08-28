@@ -62,6 +62,13 @@
 /app/src/main/java/com/inventario/multisucursal/inventory/InventoryService.java
 /app/src/main/java/com/inventario/multisucursal/inventory/MovementDirection.java
 /app/src/main/java/com/inventario/multisucursal/inventory/MovementReason.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlert.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertController.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertRepository.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertResponse.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertRow.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertService.java
+/app/src/main/java/com/inventario/multisucursal/inventory/StockAlertStatus.java
 /app/src/main/java/com/inventario/multisucursal/logistics/CreateRouteRequest.java
 /app/src/main/java/com/inventario/multisucursal/logistics/Route.java
 /app/src/main/java/com/inventario/multisucursal/logistics/RouteClassification.java
@@ -160,6 +167,7 @@
 /app/src/main/java/com/inventario/multisucursal/transfers/TransferService.java
 /app/src/main/java/com/inventario/multisucursal/transfers/TransferStatus.java
 /app/src/main/java/com/inventario/multisucursal/users/CreateUserRequest.java
+/app/src/main/java/com/inventario/multisucursal/users/DeactivateUserRequest.java
 /app/src/main/java/com/inventario/multisucursal/users/RoleCode.java
 /app/src/main/java/com/inventario/multisucursal/users/RoleController.java
 /app/src/main/java/com/inventario/multisucursal/users/RoleResponse.java

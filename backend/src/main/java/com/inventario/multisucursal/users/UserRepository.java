@@ -21,6 +21,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     boolean existsByBranchIdAndActiveTrue(Long branchId);
 
+    /**
+     * Usado por {@code branches.BranchService} para impedir eliminar una
+     * sucursal con cualquier usuario asignado, activo o no (a diferencia de
+     * {@link #existsByBranchIdAndActiveTrue}: aquí ni siquiera un usuario ya
+     * desactivado debe quedar apuntando a una sucursal que ya no existe).
+     */
+    boolean existsByBranchId(Long branchId);
+
     @Query("""
             SELECT u FROM User u
             WHERE (:branchId IS NULL OR u.branchId = :branchId)

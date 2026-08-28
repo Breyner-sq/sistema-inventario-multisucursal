@@ -4,6 +4,7 @@ import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
 import com.inventario.multisucursal.common.web.PageResponse;
 import com.inventario.multisucursal.users.UserRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +72,43 @@ public class BranchService {
         }
         branch.deactivate();
         return BranchResponse.from(branch);
+    }
+
+    /**
+     * Eliminación real (no reversible), a diferencia de activar/desactivar.
+     *
+     * <p>La comprobación de usuarios asignados es explícita porque
+     * {@code users} ya es una dependencia legítima de este módulo (igual que
+     * en {@link #deactivate}); el resto de referencias posibles —inventario,
+     * compras, ventas, transferencias, rutas— viven en módulos que
+     * {@code branches} no debe pasar a depender solo para esto (invertiría el
+     * grafo de dependencias, docs/ARCHITECTURE.md sección 4). Para esas se
+     * confía en las FK {@code ON DELETE RESTRICT} hacia {@code branch} que ya
+     * declara el esquema: PostgreSQL rechaza el `DELETE` y se traduce aquí a
+     * un conflicto legible. <b>Esta segunda vía solo se ejerce contra
+     * PostgreSQL real</b> (Hibernate no genera esas FK en el esquema de
+     * pruebas H2 porque el modelo no usa asociaciones JPA, docs/DECISIONS.md)
+     * — verificada en vivo, no por la suite basada en H2, igual que
+     * {@code FlywayMigrationIntegrationTest}.
+     */
+    @Transactional
+    public void delete(Long id) {
+        Branch branch = findOrThrow(id);
+        if (userRepository.existsByBranchId(id)) {
+            throw conflict();
+        }
+        try {
+            branchRepository.delete(branch);
+            branchRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            throw conflict();
+        }
+    }
+
+    private ResourceConflictException conflict() {
+        return new ResourceConflictException(
+                "SUCURSAL_CON_DATOS_ASOCIADOS",
+                "No se puede eliminar la sucursal: tiene usuarios, inventario, compras, ventas, transferencias o rutas asociadas. Desactívala en su lugar.");
     }
 
     private Branch findOrThrow(Long id) {

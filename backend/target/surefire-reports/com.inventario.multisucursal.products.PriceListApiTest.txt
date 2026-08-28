@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.products.PriceListApiTest
 -------------------------------------------------------------------------------
-Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.785 s -- in com.inventario.multisucursal.products.PriceListApiTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.812 s -- in com.inventario.multisucursal.products.PriceListApiTest

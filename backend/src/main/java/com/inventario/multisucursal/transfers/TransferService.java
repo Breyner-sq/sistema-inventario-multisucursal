@@ -16,6 +16,7 @@ import com.inventario.multisucursal.inventory.InventoryMovementRepository;
 import com.inventario.multisucursal.inventory.InventoryRepository;
 import com.inventario.multisucursal.inventory.MovementDirection;
 import com.inventario.multisucursal.inventory.MovementReason;
+import com.inventario.multisucursal.inventory.StockAlertService;
 import com.inventario.multisucursal.logistics.Route;
 import com.inventario.multisucursal.logistics.RouteService;
 import com.inventario.multisucursal.products.Product;
@@ -80,6 +81,7 @@ public class TransferService {
     private final RouteService routeService;
     private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
+    private final StockAlertService stockAlertService;
 
     public TransferService(
             TransferRepository transferRepository,
@@ -90,7 +92,8 @@ public class TransferService {
             InventoryMovementRepository movementRepository,
             RouteService routeService,
             DomainEventPublisher eventPublisher,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            StockAlertService stockAlertService) {
         this.transferRepository = transferRepository;
         this.transferItemRepository = transferItemRepository;
         this.branchRepository = branchRepository;
@@ -100,6 +103,7 @@ public class TransferService {
         this.routeService = routeService;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
+        this.stockAlertService = stockAlertService;
     }
 
     // ---- C1: solicitud ----
@@ -438,8 +442,9 @@ public class TransferService {
                         "STOCK_INSUFICIENTE",
                         "El stock disponible (" + available + ") es menor a la cantidad a despachar (" + quantity + ").");
             }
-            if (inventoryRepository.applyQuantity(
-                    inventory.getId(), inventory.getVersion(), available.subtract(quantity), Instant.now()) == 1) {
+            BigDecimal newQuantity = available.subtract(quantity);
+            if (inventoryRepository.applyQuantity(inventory.getId(), inventory.getVersion(), newQuantity, Instant.now()) == 1) {
+                stockAlertService.evaluate(inventory.getId(), branchId, productId, newQuantity, inventory.getMinimumStock());
                 return;
             }
         }
@@ -453,6 +458,7 @@ public class TransferService {
             Inventory inventory = findOrCreateInventory(productId, branchId);
             BigDecimal newQuantity = inventory.getQuantityOnHand().add(quantity).setScale(QUANTITY_SCALE, java.math.RoundingMode.HALF_UP);
             if (inventoryRepository.applyQuantity(inventory.getId(), inventory.getVersion(), newQuantity, Instant.now()) == 1) {
+                stockAlertService.evaluate(inventory.getId(), branchId, productId, newQuantity, inventory.getMinimumStock());
                 return;
             }
         }

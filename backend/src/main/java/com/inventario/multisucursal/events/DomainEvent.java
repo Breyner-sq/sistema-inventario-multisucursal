@@ -27,12 +27,30 @@ public record DomainEvent(
         Instant occurredAt) {
 
     public static final String INVENTORY_UPDATED = "inventory.updated";
+    public static final String STOCK_ALERT_TRIGGERED = "stock-alert.triggered";
+    public static final String STOCK_ALERT_RESOLVED = "stock-alert.resolved";
     public static final String TRANSFER_STATUS_CHANGED = "transfer.status-changed";
     public static final String TRANSFER_DISCREPANCY_OPENED = "transfer.discrepancy-opened";
 
     /** Cambió el stock de un producto en una sucursal (RF-002, RNF-001). {@code resourceId} = producto. */
     public static DomainEvent inventoryUpdated(Long branchId, Long productId) {
         return new DomainEvent(INVENTORY_UPDATED, Set.of(branchId), String.valueOf(productId), false, Instant.now());
+    }
+
+    /**
+     * Un producto en una sucursal alcanzó o cayó por debajo de su stock
+     * mínimo (BR-010, UC-16). {@code resourceId} = producto. {@code
+     * branchRestricted = false}: la lectura de `stock-alerts` es abierta a
+     * cualquier sucursal, igual que `inventory` (RF-003) — la señal no
+     * revela nada que el destinatario no pudiera ya consultar por REST.
+     */
+    public static DomainEvent stockAlertTriggered(Long branchId, Long productId) {
+        return new DomainEvent(STOCK_ALERT_TRIGGERED, Set.of(branchId), String.valueOf(productId), false, Instant.now());
+    }
+
+    /** El stock de ese producto volvió a superar el mínimo y su alerta activa se resolvió (BR-010). */
+    public static DomainEvent stockAlertResolved(Long branchId, Long productId) {
+        return new DomainEvent(STOCK_ALERT_RESOLVED, Set.of(branchId), String.valueOf(productId), false, Instant.now());
     }
 
     /** Una transferencia avanzó de estado (RF-029). {@code resourceId} = transferencia. */

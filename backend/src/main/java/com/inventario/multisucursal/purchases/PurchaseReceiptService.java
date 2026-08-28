@@ -13,6 +13,7 @@ import com.inventario.multisucursal.inventory.InventoryMovementRepository;
 import com.inventario.multisucursal.inventory.InventoryRepository;
 import com.inventario.multisucursal.inventory.MovementDirection;
 import com.inventario.multisucursal.inventory.MovementReason;
+import com.inventario.multisucursal.inventory.StockAlertService;
 import com.inventario.multisucursal.products.Product;
 import com.inventario.multisucursal.products.ProductRepository;
 import com.inventario.multisucursal.products.ProductUnit;
@@ -62,6 +63,7 @@ public class PurchaseReceiptService {
     private final ProductUnitRepository productUnitRepository;
     private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
+    private final StockAlertService stockAlertService;
 
     public PurchaseReceiptService(
             PurchaseOrderRepository purchaseOrderRepository,
@@ -71,7 +73,8 @@ public class PurchaseReceiptService {
             ProductRepository productRepository,
             ProductUnitRepository productUnitRepository,
             DomainEventPublisher eventPublisher,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            StockAlertService stockAlertService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.purchaseOrderItemRepository = purchaseOrderItemRepository;
         this.inventoryRepository = inventoryRepository;
@@ -80,6 +83,7 @@ public class PurchaseReceiptService {
         this.productUnitRepository = productUnitRepository;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
+        this.stockAlertService = stockAlertService;
     }
 
     @Transactional
@@ -188,6 +192,7 @@ public class PurchaseReceiptService {
 
             int updated = inventoryRepository.applyReceipt(inventory.getId(), inventory.getVersion(), newQuantity, newCost, Instant.now());
             if (updated == 1) {
+                stockAlertService.evaluate(inventory.getId(), branchId, productId, newQuantity, inventory.getMinimumStock());
                 return inventoryRepository.findByProductIdAndBranchId(productId, branchId).orElseThrow();
             }
         }

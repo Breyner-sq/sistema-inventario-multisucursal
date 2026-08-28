@@ -50,6 +50,7 @@ public class InventoryMovementService {
     private final BranchRepository branchRepository;
     private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
+    private final StockAlertService stockAlertService;
 
     public InventoryMovementService(
             InventoryRepository inventoryRepository,
@@ -58,7 +59,8 @@ public class InventoryMovementService {
             ProductUnitRepository productUnitRepository,
             BranchRepository branchRepository,
             DomainEventPublisher eventPublisher,
-            AuthorizationService authorizationService) {
+            AuthorizationService authorizationService,
+            StockAlertService stockAlertService) {
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
         this.productRepository = productRepository;
@@ -66,6 +68,7 @@ public class InventoryMovementService {
         this.branchRepository = branchRepository;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
+        this.stockAlertService = stockAlertService;
     }
 
     @Transactional
@@ -163,6 +166,7 @@ public class InventoryMovementService {
 
             int updated = inventoryRepository.applyQuantity(inventory.getId(), inventory.getVersion(), newQuantity, Instant.now());
             if (updated == 1) {
+                stockAlertService.evaluate(inventory.getId(), branchId, productId, newQuantity, inventory.getMinimumStock());
                 return;
             }
         }

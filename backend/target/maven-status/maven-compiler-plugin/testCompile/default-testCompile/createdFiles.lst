@@ -1,5 +1,6 @@
 com/inventario/multisucursal/FlywayMigrationIntegrationTest.class
 com/inventario/multisucursal/auth/AuthorizationDemoController.class
+com/inventario/multisucursal/inventory/StockAlertApiTest$StockAlertPageResponse.class
 com/inventario/multisucursal/inventory/InventoryConcurrencyTest.class
 com/inventario/multisucursal/sales/SaleRollbackTest.class
 com/inventario/multisucursal/common/audit/AuditableEntityTest.class
@@ -13,6 +14,7 @@ com/inventario/multisucursal/purchases/PurchaseOrderApiTest.class
 com/inventario/multisucursal/inventory/InventoryAdjustmentRollbackTest.class
 com/inventario/multisucursal/products/ProductApiTest.class
 com/inventario/multisucursal/suppliers/SupplierApiTest.class
+com/inventario/multisucursal/inventory/StockAlertNotificationFailureTest.class
 com/inventario/multisucursal/branches/BranchApiTest.class
 com/inventario/multisucursal/transfers/TransferApiTest.class
 com/inventario/multisucursal/common/web/GlobalExceptionHandlerTest.class
@@ -20,6 +22,7 @@ com/inventario/multisucursal/transfers/TransferConcurrencyTest.class
 com/inventario/multisucursal/logistics/RouteApiTest.class
 com/inventario/multisucursal/InventarioApplicationTests.class
 com/inventario/multisucursal/reports/LogisticsComplianceApiTest.class
+com/inventario/multisucursal/inventory/StockAlertApiTest.class
 com/inventario/multisucursal/events/EventStreamApiTest.class
 com/inventario/multisucursal/products/PriceListApiTest.class
 com/inventario/multisucursal/purchases/PurchaseReceiptApiTest.class
