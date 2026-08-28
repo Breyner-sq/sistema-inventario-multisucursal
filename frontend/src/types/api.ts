@@ -446,3 +446,87 @@ export interface LogisticsComplianceResponse {
   summary: ComplianceMetrics;
   byRoute: RouteCompliance[];
 }
+
+// ---- Dashboard (docs/API_DESIGN.md, sección 7.10; RF-031 a RF-035) ----
+
+export interface MonthlySales {
+  period: string;
+  totalSales: number;
+  salesCount: number;
+}
+
+export interface SalesTrendResponse {
+  branchId: string;
+  branchName: string;
+  currentMonth: MonthlySales;
+  /** Cronológico ascendente: el más antiguo primero. */
+  previousMonths: MonthlySales[];
+  /** `null` cuando el mes anterior no tuvo ventas — no calculable, nunca Infinity. */
+  growthVsPreviousMonthPercentage: number | null;
+}
+
+export interface ProductDemandEntry {
+  productId: string;
+  sku: string | null;
+  name: string | null;
+  unitsSold: number;
+  currentStock: number;
+  /** `null` cuando el stock actual es 0 — no calculable (ver ADR del dashboard). */
+  turnoverRatio: number | null;
+}
+
+export interface InventoryDemandResponse {
+  branchId: string;
+  branchName: string;
+  windowFrom: string;
+  windowTo: string;
+  topDemand: ProductDemandEntry[];
+  lowDemand: ProductDemandEntry[];
+}
+
+export interface ActiveTransferEntry {
+  transferId: string;
+  transferNumber: string;
+  status: TransferStatus;
+  originBranchId: string;
+  destinationBranchId: string;
+  urgency: boolean;
+  unitsInTransit: number;
+  unitsPendingDispatch: number;
+}
+
+export interface ActiveTransfersDashboardResponse {
+  branchId: string;
+  branchName: string;
+  activeCount: number;
+  totalUnitsInTransit: number;
+  totalUnitsPendingDispatch: number;
+  transfers: ActiveTransferEntry[];
+}
+
+export interface ReplenishmentEntry {
+  productId: string;
+  sku: string | null;
+  name: string | null;
+  quantityOnHand: number;
+  minimumStock: number;
+}
+
+export interface ReplenishmentDashboardResponse {
+  branchId: string;
+  branchName: string;
+  lowStockCount: number;
+  mostUrgent: ReplenishmentEntry[];
+}
+
+export interface BranchMetrics {
+  branchId: string;
+  branchName: string;
+  currentMonthSales: number;
+  activeTransfersCount: number;
+  lowStockCount: number;
+}
+
+export interface BranchComparisonResponse {
+  branches: BranchMetrics[];
+}

@@ -57,6 +57,15 @@ export const queryKeys = {
   transfer: (id: string) => ["transfers", id] as const,
   routes: (params?: unknown) => ["routes", params ?? {}] as const,
   logisticsCompliance: (params?: unknown) => ["logistics-compliance", params ?? {}] as const,
+  dashboardSales: (params?: unknown) => ["dashboard-sales", params ?? {}] as const,
+  dashboardDemand: (params?: unknown) => ["dashboard-demand", params ?? {}] as const,
+  // Bajo el mismo prefijo que la lista de transferencias a propósito: cuando
+  // llega `transfer.status-changed` por SSE, la invalidación de
+  // `queryPrefixes.transfers` alcanza también a este panel del dashboard sin
+  // un mecanismo aparte (ver useTransferRealtime).
+  dashboardActiveTransfers: (branchId: string) => ["transfers", "dashboard-active", branchId] as const,
+  dashboardReplenishment: (params?: unknown) => ["dashboard-replenishment", params ?? {}] as const,
+  dashboardBranchComparison: () => ["dashboard-branch-comparison"] as const,
 };
 
 /**

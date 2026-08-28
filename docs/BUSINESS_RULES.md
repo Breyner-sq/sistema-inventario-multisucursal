@@ -340,6 +340,47 @@ Regla general para distinguir 409 de 422: **409 es "no en este momento/estado"**
 - **Error esperado:** un rango sin datos devuelve un reporte vacío con 200, no un 404 (UC-12, flujo alterno 3a).
 - **Pruebas necesarias:** estimado vs. real con una entrega puntual y una tardía; transferencia sin despacho excluida; recepción parcial contada como entregada y como faltante; despacho sin fecha estimada no contado como puntual; rango vacío devuelve 200.
 
+
+### BR-039 — Ventas del mes actual vs. anteriores: ventana y agregación **[Decisión]**
+
+- **Descripción:** RF-031 pide "volumen de ventas del mes en curso vs. meses anteriores" sin fijar cuántos meses atrás mostrar. Se adopta el supuesto ya registrado en `docs/PROJECT_BRIEF.md` (sección 3.8): **mes actual + 3 meses anteriores** (parámetro `months`, por defecto 3 — total de baldes = `months + 1`), tal como ya lo documenta `docs/openapi.yaml` para `GET /dashboard/sales-summary`. Cada balde es un mes calendario UTC; el balde 0 es el mes en curso.
+- **Entidades afectadas:** ninguna nueva — lectura de `Sale` (`status = CONFIRMED` únicamente).
+- **Validación:** por balde, `totalSales = SUM(Sale.total)` y `salesCount = COUNT(Sale.id)`, agregados en una sola consulta SQL agrupada por rango de fecha (comparación de fronteras calculadas en el servicio, no una función de truncamiento específica de un motor — portable entre PostgreSQL y H2). Un balde sin ventas aparece igual, con `totalSales = 0`, nunca se omite. La variación porcentual mostrada (mes actual vs. el inmediatamente anterior) es aritmética simple sobre los dos totales ya agregados, y es `null` —no `Infinity` ni `0%`— cuando el mes anterior no tuvo ventas. `branchId` es obligatorio: este endpoint reporta **una** sucursal a la vez — comparar entre sucursales es el propósito de BR-043, no de este.
+- **Error esperado:** 400 `SUCURSAL_REQUERIDA` si falta `branchId`; 403 `SUCURSAL_NO_AUTORIZADA` si un `OPERATOR` pide una sucursal ajena — `MANAGER`/`ADMIN` pueden consultar cualquiera, mismo criterio ya aplicado en `reports/logistics-compliance` (`docs/API_DESIGN.md`, sección 6).
+- **Pruebas necesarias:** dataset con ventas en 2 de los 4 meses de la ventana — los otros 2 aparecen en 0; variación porcentual correcta cuando ambos meses tienen ventas; variación `null` cuando el mes anterior no tuvo ninguna; `branchId` ausente rechazado; sucursal ajena rechazada para `OPERATOR`.
+
+### BR-040 — Rotación de inventario y productos de alta/baja demanda **[Decisión]**
+
+- **Descripción:** RF-032 pide "rotación de inventario" sin definir la fórmula ni el dato de que dispone el sistema para calcularla. El sistema **no** conserva una serie histórica de saldos de inventario — solo `Inventory.quantity_on_hand` materializado al momento de la consulta. La fórmula clásica de rotación (unidades vendidas ÷ inventario **promedio** del período) exigiría snapshots periódicos que el modelo aprobado no guarda; inventar esa precisión sería falsear el dato. Se adopta una definición simplificada y explícita: **rotación = unidades vendidas en la ventana (BR-039) ÷ stock actual (`quantityOnHand`)**. Si el stock actual es 0, la rotación **no es calculable** y se devuelve `null` (nunca una división por cero ni un valor infinito).
+- **Entidades afectadas:** ninguna nueva — lectura de `SaleItem`+`Sale` (unidades vendidas) e `Inventory` (stock actual).
+- **Validación:** las unidades vendidas por producto se agregan en SQL (`SUM(SaleItem.quantity) GROUP BY productId`, uniendo `SaleItem` con `Sale` por `saleId` — mismo patrón de unión sin asociación JPA ya usado en `InventoryRepository.search` con `Product`), limitando el resultado a los `limit` productos de mayor y de menor venta (`ORDER BY` + `LIMIT` en la base de datos, nunca cargando todo el catálogo para ordenar en memoria). "Alta demanda" = los `limit` productos con más unidades vendidas en la ventana; "baja demanda" = los `limit` con menos, **incluyendo productos con 0 ventas** en la ventana (es la señal más directa de baja demanda, no se excluye). Solo se consideran productos con una fila de `Inventory` en la sucursal consultada — no todo el catálogo global.
+- **Error esperado:** igual que BR-039 (`branchId` obligatorio y con el mismo control de acceso).
+- **Pruebas necesarias:** producto con ventas altas aparece en "alta demanda"; producto sin ninguna venta en la ventana aparece en "baja demanda" con rotación `null` si además tiene stock 0, o con rotación `0` si tiene stock > 0; división por stock 0 nunca lanza error ni deja `Infinity`; `limit` respeta el máximo configurado.
+
+### BR-041 — Transferencias activas y su impacto en inventario **[Decisión]**
+
+- **Descripción:** RF-033 pide "estado de transferencias activas y su impacto en inventario". "Activa" se define como **cualquier estado no terminal** de la máquina de estados de BR-020: `REQUESTED`, `APPROVED`, `IN_TRANSIT`, `RECEIVED_PARTIAL` (con al menos un faltante sin tratar). `REJECTED`, `RECEIVED_COMPLETE` y `CLOSED` quedan fuera. El "impacto en inventario" distingue explícitamente lo **ya ocurrido** de lo **proyectado**, para no presentar una cosa como la otra.
+- **Entidades afectadas:** ninguna nueva — lectura de `Transfer`+`TransferItem`, acotada a las transferencias donde la sucursal consultada es origen o destino.
+- **Validación:** por línea de una transferencia activa, una de dos — nunca ambas, porque el despacho de una línea es un único evento que no se repite (BR-034): si **no se ha despachado** (`quantityShipped IS NULL`), toda la cantidad comprometida es efecto proyectado: `unitsPendingDispatch += (quantityApproved ?? quantityRequested)`; si **ya se despachó**, lo no despachado de esa línea no vuelve a estar "pendiente" —no hay un segundo envío que lo complete— y lo que cuenta es lo real: `unitsInTransit += quantityShipped − (quantityReceived ?? 0)`, el stock que ya salió del origen y todavía no llegó al destino. Ambos son ≥ 0 por construcción (BR-013, BR-014).
+- **Error esperado:** igual que BR-039 (`branchId` obligatorio y con el mismo control de acceso).
+- **Pruebas necesarias:** una línea `IN_TRANSIT` reporta `unitsInTransit` igual a lo despachado y aún no recibido, con `unitsPendingDispatch = 0` para esa línea aunque se haya despachado menos de lo aprobado; una línea `REQUESTED`/`APPROVED` sin despachar reporta `unitsPendingDispatch` igual a lo comprometido y `unitsInTransit = 0`; una transferencia cerrada o rechazada no aparece en absoluto.
+
+### BR-042 — Indicadores de reabastecimiento **[Decisión]**
+
+- **Descripción:** RF-034 pide destacar "productos próximos a agotarse". Se reutiliza exactamente el mismo umbral ya aprobado en BR-010 (`quantity_on_hand <= minimum_stock`) — no se define un segundo umbral distinto para el dashboard, que discreparía del que ya usa el filtro `lowStock` de `GET /inventory`.
+- **Entidades afectadas:** ninguna nueva — lectura de `Inventory`.
+- **Validación:** el conteo total de productos bajo el umbral se agrega con `COUNT` en SQL; el listado de los más urgentes se ordena por `(quantity_on_hand - minimum_stock)` ascendente (más negativo = más urgente) con desempate por `quantity_on_hand` ascendente, limitado a `limit` filas mediante `LIMIT`/`Pageable` — nunca cargando todo el inventario de la sucursal para ordenar en memoria.
+- **Error esperado:** igual que BR-039 (`branchId` obligatorio y con el mismo control de acceso).
+- **Pruebas necesarias:** un producto exactamente en el mínimo aparece incluido; el orden de urgencia coloca primero al que está más por debajo de su mínimo; una sucursal sin productos bajo el umbral devuelve conteo 0 y lista vacía, no un error.
+
+### BR-043 — Comparativa entre sucursales: solo perfiles administrativos **[Decisión]**
+
+- **Descripción:** RF-035 exige que la comparativa entre sucursales sea visible **solo** para perfiles administrativos. Se adopta el mismo corte ya aprobado para `reports/logistics-compliance` (`docs/API_DESIGN.md`, sección 6): `MANAGER` y `ADMIN` pueden compararlas todas; `OPERATOR` no accede en absoluto al endpoint (403, no una respuesta vacía ni una versión reducida).
+- **Entidades afectadas:** ninguna nueva.
+- **Validación:** por cada sucursal activa se calculan, con las mismas consultas agregadas de BR-039/BR-041/BR-042 (una vez por sucursal, nunca cargando todas las sucursales en una sola consulta sin agrupar): ventas del mes en curso, conteo de transferencias activas que la involucran y conteo de productos bajo el umbral de reabastecimiento. No es un promedio ni un ranking adicional — son las mismas cifras que cada sucursal ya expone individualmente, solo yuxtapuestas para comparar.
+- **Error esperado:** 403 `ROL_NO_AUTORIZADO` para `OPERATOR`.
+- **Pruebas necesarias:** `OPERATOR` recibe 403; `MANAGER`/`ADMIN` reciben una fila por cada sucursal activa; una sucursal sin ventas ni transferencias aparece con ceros, no se omite.
+
 ---
 
 ## Ajustes pendientes al modelo de dominio (para aprobar antes de migrar)

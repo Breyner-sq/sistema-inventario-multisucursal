@@ -95,3 +95,11 @@ th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--borde
 
 fieldset { border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; margin: 1rem 0; }
 .radio-option { display: block; margin: 0.5rem 0; }
+
+.dashboard-panel { margin-bottom: 1.5rem; }
+.dashboard-panel__columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem; }
+
+.mini-bar-chart { width: 100%; max-width: 32rem; height: auto; }
+.mini-bar-chart__bar { fill: var(--muted); }
+.mini-bar-chart__value { font-size: 9px; fill: #18181b; }
+.mini-bar-chart__label { font-size: 9px; fill: var(--muted); }

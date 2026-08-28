@@ -24,6 +24,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Inicio", path: "/" },
+  { label: "Dashboard", path: "/dashboard" },
   { label: "Inventario", path: "/inventario" },
   { label: "Productos", path: "/productos" },
   { label: "Compras", path: "/compras" },
@@ -102,4 +103,15 @@ export const canTransfers = {
 export const canLogistics = {
   /** Clasificar/reclasificar rutas. */
   writeRoutes: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
+};
+
+/**
+ * Alcance de sucursal en el dashboard (BR-039 a BR-043): distinto de
+ * `canWriteInBranch` porque aquí `MANAGER` **no** queda limitado a la suya —
+ * mismo "dashboard completo" ya aprobado para el reporte de cumplimiento
+ * logístico. Solo `OPERATOR` se restringe a su propia sucursal.
+ */
+export const canDashboard = {
+  queryAnyBranch: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
+  compareBranches: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
 };

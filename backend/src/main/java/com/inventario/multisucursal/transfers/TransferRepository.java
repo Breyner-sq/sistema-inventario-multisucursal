@@ -128,4 +128,22 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
             @Param("role") String role,
             @Param("status") TransferStatus status,
             Pageable pageable);
+
+    /**
+     * Transferencias activas de una sucursal —origen o destino— para el
+     * dashboard (BR-041, RF-033). "Activa" = cualquier estado no terminal de
+     * la máquina de estados de BR-020: excluye {@code REJECTED},
+     * {@code RECEIVED_COMPLETE} y {@code CLOSED}.
+     */
+    @Query("""
+            SELECT t FROM Transfer t
+             WHERE (t.originBranchId = :branchId OR t.destinationBranchId = :branchId)
+               AND t.status IN (
+                    com.inventario.multisucursal.transfers.TransferStatus.REQUESTED,
+                    com.inventario.multisucursal.transfers.TransferStatus.APPROVED,
+                    com.inventario.multisucursal.transfers.TransferStatus.IN_TRANSIT,
+                    com.inventario.multisucursal.transfers.TransferStatus.RECEIVED_PARTIAL)
+             ORDER BY t.requestedAt DESC
+            """)
+    List<Transfer> findActive(@Param("branchId") Long branchId);
 }

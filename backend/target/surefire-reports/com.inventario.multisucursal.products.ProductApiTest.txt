@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.products.ProductApiTest
 -------------------------------------------------------------------------------
-Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.532 s -- in com.inventario.multisucursal.products.ProductApiTest
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.895 s -- in com.inventario.multisucursal.products.ProductApiTest

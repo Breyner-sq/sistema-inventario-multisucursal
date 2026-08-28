@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface InventoryRepository extends JpaRepository<Inventory, Long> {
@@ -72,4 +74,32 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
             @Param("search") String search,
             @Param("lowStock") boolean lowStock,
             Pageable pageable);
+
+    /**
+     * Catálogo de productos que la sucursal tiene registrados en inventario
+     * (BR-040, dashboard RF-032) — es el ancla para completar con 0 las
+     * unidades vendidas de un producto sin ventas en la ventana, sin asumir
+     * que "sin ventas" signifique "no existe en esta sucursal".
+     */
+    @Query("SELECT i.productId FROM Inventory i WHERE i.branchId = :branchId")
+    List<Long> productIdsInBranch(@Param("branchId") Long branchId);
+
+    List<Inventory> findByBranchIdAndProductIdIn(Long branchId, Collection<Long> productIds);
+
+    /** Conteo agregado para el indicador de reabastecimiento (BR-042, dashboard RF-034). */
+    @Query("SELECT COUNT(i) FROM Inventory i WHERE i.branchId = :branchId AND i.quantityOnHand <= i.minimumStock")
+    long countLowStock(@Param("branchId") Long branchId);
+
+    /**
+     * Los más urgentes primero: más por debajo de su mínimo, desempatado por
+     * el que tiene menos stock absoluto (BR-042). {@code LIMIT} vía
+     * {@code Pageable} — nunca se trae todo el inventario de la sucursal
+     * para ordenar en memoria.
+     */
+    @Query("""
+            SELECT i FROM Inventory i
+             WHERE i.branchId = :branchId AND i.quantityOnHand <= i.minimumStock
+             ORDER BY (i.quantityOnHand - i.minimumStock) ASC, i.quantityOnHand ASC
+            """)
+    List<Inventory> findMostUrgentLowStock(@Param("branchId") Long branchId, Pageable pageable);
 }

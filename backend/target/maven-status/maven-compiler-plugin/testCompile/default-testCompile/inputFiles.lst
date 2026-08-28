@@ -7,6 +7,7 @@
 /app/src/test/java/com/inventario/multisucursal/common/audit/AuditableTestEntity.java
 /app/src/test/java/com/inventario/multisucursal/common/web/ErrorFormatTestController.java
 /app/src/test/java/com/inventario/multisucursal/common/web/GlobalExceptionHandlerTest.java
+/app/src/test/java/com/inventario/multisucursal/dashboard/DashboardApiTest.java
 /app/src/test/java/com/inventario/multisucursal/events/EventBroadcastTest.java
 /app/src/test/java/com/inventario/multisucursal/events/EventStreamApiTest.java
 /app/src/test/java/com/inventario/multisucursal/inventory/InventoryAdjustmentApiTest.java

@@ -27,4 +27,19 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
             @Param("dateFrom") Instant dateFrom,
             @Param("dateTo") Instant dateTo,
             Pageable pageable);
+
+    /**
+     * Base del indicador "ventas del mes vs. anteriores" (BR-039, dashboard
+     * RF-031). Un rango sin ventas confirmadas devuelve {@code totalSales = 0}
+     * gracias al {@code COALESCE} — nunca una fila ausente que el servicio
+     * tendría que distinguir de "hubo un error".
+     */
+    @Query("""
+            SELECT new com.inventario.multisucursal.sales.SalesAggregate(COALESCE(SUM(s.total), 0), COUNT(s))
+              FROM Sale s
+             WHERE s.branchId = :branchId
+               AND s.status = com.inventario.multisucursal.sales.SaleStatus.CONFIRMED
+               AND s.saleDate >= :from AND s.saleDate < :to
+            """)
+    SalesAggregate aggregateForRange(@Param("branchId") Long branchId, @Param("from") Instant from, @Param("to") Instant to);
 }

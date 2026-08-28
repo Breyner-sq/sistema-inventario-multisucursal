@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Ciclo completo de transferencia entre sucursales (flujos C–F de
@@ -378,6 +379,47 @@ public class TransferService {
         Long effectiveBranchId = scope != null ? scope : branchId;
         return PageResponse.from(transferRepository.search(effectiveBranchId, role, status, pageable)
                 .map(transfer -> TransferResponse.from(transfer, transferItemRepository.findByTransferId(transfer.getId()))));
+    }
+
+    /**
+     * Transferencias activas de una sucursal con su impacto en inventario
+     * (BR-041, dashboard RF-033). Sin autorización propia — mismo criterio que
+     * {@link #findDispatchedForCompliance}: quien llama ya resolvió el
+     * alcance de sucursal.
+     */
+    public List<ActiveTransferImpact> findActiveForDashboard(Long branchId) {
+        List<Transfer> transfers = transferRepository.findActive(branchId);
+        if (transfers.isEmpty()) {
+            return List.of();
+        }
+        List<Long> transferIds = transfers.stream().map(Transfer::getId).toList();
+        Map<Long, List<TransferItem>> itemsByTransfer = transferItemRepository.findByTransferIdIn(transferIds).stream()
+                .collect(Collectors.groupingBy(TransferItem::getTransferId));
+
+        List<ActiveTransferImpact> impacts = new ArrayList<>();
+        for (Transfer transfer : transfers) {
+            BigDecimal unitsInTransit = BigDecimal.ZERO;
+            BigDecimal unitsPendingDispatch = BigDecimal.ZERO;
+            for (TransferItem item : itemsByTransfer.getOrDefault(transfer.getId(), List.of())) {
+                if (item.getQuantityShipped() == null) {
+                    // Todavía no se despachó: el efecto es enteramente proyectado.
+                    BigDecimal committed = item.getQuantityApproved() != null ? item.getQuantityApproved() : item.getQuantityRequested();
+                    unitsPendingDispatch = unitsPendingDispatch.add(committed);
+                } else {
+                    // Ya se despachó —una sola vez, BR-034— así que lo no despachado
+                    // de esta línea no queda "pendiente": el despacho de una
+                    // transferencia es un único evento por línea, no admite un
+                    // segundo envío posterior para completar la diferencia.
+                    BigDecimal received = item.getQuantityReceived() != null ? item.getQuantityReceived() : BigDecimal.ZERO;
+                    unitsInTransit = unitsInTransit.add(item.getQuantityShipped().subtract(received));
+                }
+            }
+            impacts.add(new ActiveTransferImpact(
+                    transfer.getId(), transfer.getTransferNumber(), transfer.getStatus(),
+                    transfer.getOriginBranchId(), transfer.getDestinationBranchId(), transfer.isUrgency(),
+                    unitsInTransit, unitsPendingDispatch));
+        }
+        return impacts;
     }
 
     // ---- helpers ----

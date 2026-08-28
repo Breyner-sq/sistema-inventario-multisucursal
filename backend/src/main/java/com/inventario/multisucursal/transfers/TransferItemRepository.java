@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -18,6 +19,9 @@ import java.util.List;
 public interface TransferItemRepository extends JpaRepository<TransferItem, Long> {
 
     List<TransferItem> findByTransferId(Long transferId);
+
+    /** Evita N+1 al calcular el impacto de varias transferencias activas a la vez (BR-041). */
+    List<TransferItem> findByTransferIdIn(Collection<Long> transferIds);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

@@ -8,6 +8,7 @@ com/inventario/multisucursal/purchases/PurchaseReceiptRollbackTest.class
 com/inventario/multisucursal/common/audit/AuditableTestEntity.class
 com/inventario/multisucursal/sales/SaleApiTest.class
 com/inventario/multisucursal/events/EventStreamApiTest$StreamResult.class
+com/inventario/multisucursal/dashboard/DashboardApiTest.class
 com/inventario/multisucursal/purchases/PurchaseOrderApiTest.class
 com/inventario/multisucursal/inventory/InventoryAdjustmentRollbackTest.class
 com/inventario/multisucursal/products/ProductApiTest.class

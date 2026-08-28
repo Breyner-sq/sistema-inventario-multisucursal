@@ -195,6 +195,80 @@ export function logisticsCompliance(overrides: Partial<LogisticsComplianceRespon
   };
 }
 
+export function salesTrend(overrides: Partial<import("../types/api").SalesTrendResponse> = {}) {
+  return {
+    branchId: "1",
+    branchName: "Sucursal Centro",
+    currentMonth: { period: "2026-08", totalSales: 150, salesCount: 2 },
+    previousMonths: [
+      { period: "2026-05", totalSales: 0, salesCount: 0 },
+      { period: "2026-06", totalSales: 0, salesCount: 0 },
+      { period: "2026-07", totalSales: 80, salesCount: 1 },
+    ],
+    growthVsPreviousMonthPercentage: 87.5,
+    ...overrides,
+  };
+}
+
+export function inventoryDemand(overrides: Partial<import("../types/api").InventoryDemandResponse> = {}) {
+  return {
+    branchId: "1",
+    branchName: "Sucursal Centro",
+    windowFrom: "2026-05-01T00:00:00Z",
+    windowTo: "2026-09-01T00:00:00Z",
+    topDemand: [
+      { productId: "10", sku: "SKU-001", name: "Cemento gris", unitsSold: 20, currentStock: 10, turnoverRatio: 2 },
+    ],
+    lowDemand: [
+      { productId: "11", sku: "SKU-002", name: "Arena fina", unitsSold: 0, currentStock: 5, turnoverRatio: 0 },
+    ],
+    ...overrides,
+  };
+}
+
+export function activeTransfersDashboard(overrides: Partial<import("../types/api").ActiveTransfersDashboardResponse> = {}) {
+  return {
+    branchId: "1",
+    branchName: "Sucursal Centro",
+    activeCount: 1,
+    totalUnitsInTransit: 4,
+    totalUnitsPendingDispatch: 0,
+    transfers: [
+      {
+        transferId: "500",
+        transferNumber: "TR-ABC12345",
+        status: "IN_TRANSIT" as const,
+        originBranchId: "1",
+        destinationBranchId: "2",
+        urgency: false,
+        unitsInTransit: 4,
+        unitsPendingDispatch: 0,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function replenishmentDashboard(overrides: Partial<import("../types/api").ReplenishmentDashboardResponse> = {}) {
+  return {
+    branchId: "1",
+    branchName: "Sucursal Centro",
+    lowStockCount: 1,
+    mostUrgent: [{ productId: "10", sku: "SKU-001", name: "Cemento gris", quantityOnHand: 2, minimumStock: 10 }],
+    ...overrides,
+  };
+}
+
+export function branchComparison(overrides: Partial<import("../types/api").BranchComparisonResponse> = {}) {
+  return {
+    branches: [
+      { branchId: "1", branchName: "Sucursal Centro", currentMonthSales: 150, activeTransfersCount: 1, lowStockCount: 1 },
+      { branchId: "2", branchName: "Sucursal Norte", currentMonthSales: 0, activeTransfersCount: 0, lowStockCount: 0 },
+    ],
+    ...overrides,
+  };
+}
+
 export function page<T>(content: T[], overrides: Partial<{ page: number; size: number; totalPages: number }> = {}) {
   return {
     content,

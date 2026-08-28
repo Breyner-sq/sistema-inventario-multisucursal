@@ -191,6 +191,22 @@ public class SaleService {
     }
 
     /**
+     * Totales de venta confirmada en un rango de fechas de una sucursal
+     * (BR-039). Sin autorización propia: quien llama —{@code dashboard}— ya
+     * resolvió el alcance de sucursal antes de pedir el dato, mismo criterio
+     * que {@code TransferService.findDispatchedForCompliance} para
+     * {@code reports}.
+     */
+    public SalesAggregate salesTotals(Long branchId, Instant from, Instant to) {
+        return saleRepository.aggregateForRange(branchId, from, to);
+    }
+
+    /** Unidades vendidas por producto en una ventana, para una sucursal (BR-040). */
+    public List<ProductDemand> demandByProduct(Long branchId, Instant from, Instant to) {
+        return saleItemRepository.demandByProduct(branchId, from, to);
+    }
+
+    /**
      * BR-022 aplicado al retiro por venta (docs/CRITICAL_FLOWS.md, flujo A,
      * escenario 3.1): no crea la fila de {@code Inventory} si no existe —a
      * diferencia de una recepción de compra, una venta nunca es el primer

@@ -37,6 +37,13 @@
 /app/src/main/java/com/inventario/multisucursal/common/web/JsonAuthenticationEntryPoint.java
 /app/src/main/java/com/inventario/multisucursal/common/web/PageResponse.java
 /app/src/main/java/com/inventario/multisucursal/config/JacksonConfig.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/ActiveTransfersResponse.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/BranchComparisonResponse.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/DashboardController.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/DashboardService.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/InventoryDemandResponse.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/ReplenishmentResponse.java
+/app/src/main/java/com/inventario/multisucursal/dashboard/SalesTrendResponse.java
 /app/src/main/java/com/inventario/multisucursal/events/DomainEvent.java
 /app/src/main/java/com/inventario/multisucursal/events/DomainEventPublisher.java
 /app/src/main/java/com/inventario/multisucursal/events/EventBroadcaster.java
@@ -113,6 +120,7 @@
 /app/src/main/java/com/inventario/multisucursal/reports/ReportController.java
 /app/src/main/java/com/inventario/multisucursal/sales/CreateSaleItemRequest.java
 /app/src/main/java/com/inventario/multisucursal/sales/CreateSaleRequest.java
+/app/src/main/java/com/inventario/multisucursal/sales/ProductDemand.java
 /app/src/main/java/com/inventario/multisucursal/sales/Sale.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleController.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleItem.java
@@ -122,6 +130,7 @@
 /app/src/main/java/com/inventario/multisucursal/sales/SaleResponse.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleService.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleStatus.java
+/app/src/main/java/com/inventario/multisucursal/sales/SalesAggregate.java
 /app/src/main/java/com/inventario/multisucursal/suppliers/CreateSupplierRequest.java
 /app/src/main/java/com/inventario/multisucursal/suppliers/Supplier.java
 /app/src/main/java/com/inventario/multisucursal/suppliers/SupplierController.java
@@ -129,6 +138,7 @@
 /app/src/main/java/com/inventario/multisucursal/suppliers/SupplierResponse.java
 /app/src/main/java/com/inventario/multisucursal/suppliers/SupplierService.java
 /app/src/main/java/com/inventario/multisucursal/suppliers/UpdateSupplierRequest.java
+/app/src/main/java/com/inventario/multisucursal/transfers/ActiveTransferImpact.java
 /app/src/main/java/com/inventario/multisucursal/transfers/ApplyDiscrepancyTreatmentRequest.java
 /app/src/main/java/com/inventario/multisucursal/transfers/ApproveTransferItemRequest.java
 /app/src/main/java/com/inventario/multisucursal/transfers/ApproveTransferRequest.java

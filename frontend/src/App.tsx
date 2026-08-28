@@ -18,6 +18,8 @@ import { NewTransferRequestPage } from "./pages/transfers/NewTransferRequestPage
 import { TransferDetailPage } from "./pages/transfers/TransferDetailPage";
 import { RoutesPage } from "./pages/logistics/RoutesPage";
 import { LogisticsCompliancePage } from "./pages/logistics/LogisticsCompliancePage";
+import { DashboardPage } from "./pages/dashboard/DashboardPage";
+import { BranchComparisonPage } from "./pages/dashboard/BranchComparisonPage";
 import { ForbiddenPage, HomePage, NotFoundPage, PlaceholderPage } from "./pages/SimplePages";
 
 /**
@@ -33,6 +35,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/sucursales" element={<BranchesPage />} />
           <Route path="/inventario" element={<InventoryPage />} />
           <Route path="/inventario/movimientos" element={<MovementsPage />} />
@@ -62,6 +65,13 @@ export default function App() {
 
           <Route element={<RequireRole roles={["ADMIN"]} />}>
             <Route path="/usuarios" element={<PlaceholderPage title="Usuarios" />} />
+          </Route>
+
+          {/* RF-035: la comparativa entre sucursales es exclusivamente para
+              perfiles administrativos — un OPERATOR que fuerce la URL cae en
+              "Sin permiso", no en una versión reducida de la misma pantalla. */}
+          <Route element={<RequireRole roles={["MANAGER", "ADMIN"]} />}>
+            <Route path="/dashboard/comparativa" element={<BranchComparisonPage />} />
           </Route>
 
           <Route path="/sin-permiso" element={<ForbiddenPage />} />
