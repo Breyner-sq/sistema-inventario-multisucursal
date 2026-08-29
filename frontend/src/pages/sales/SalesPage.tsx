@@ -2,11 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
+import { exportSales } from "../../api/endpoints/reports";
 import { listSales } from "../../api/endpoints/sales";
 import { queryKeys } from "../../api/queryClient";
 import { canSales } from "../../auth/permissions";
 import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
+import { ExportDialog } from "../../components/ui/ExportDialog";
 import { Pagination } from "../../components/ui/Pagination";
 
 const PAGE_SIZE = 10;
@@ -21,6 +23,7 @@ export function SalesPage() {
 
   const [branchId, setBranchId] = useState("");
   const [page, setPage] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const branchesQuery = useQuery({ queryKey: queryKeys.branches({ active: true }), queryFn: () => listBranches({ active: true }) });
   const branchesById = new Map((branchesQuery.data?.content ?? []).map((branch) => [branch.id, branch]));
@@ -32,12 +35,25 @@ export function SalesPage() {
     <section>
       <div className="page__header">
         <h1>Ventas</h1>
-        {canWrite ? (
-          <Link to="/ventas/nueva">
-            <button type="button">Nueva venta</button>
-          </Link>
-        ) : null}
+        <div className="page__actions">
+          <button type="button" onClick={() => setExporting(true)}>
+            Exportar a Excel
+          </button>
+          {canWrite ? (
+            <Link to="/ventas/nueva">
+              <button type="button">Nueva venta</button>
+            </Link>
+          ) : null}
+        </div>
       </div>
+
+      {exporting ? (
+        <ExportDialog
+          title="Exportar ventas"
+          onClose={() => setExporting(false)}
+          onExport={(range) => exportSales({ branchId: isAdmin ? branchId || undefined : undefined, ...range })}
+        />
+      ) : null}
 
       {isAdmin ? (
         <form className="filters" onSubmit={(event) => event.preventDefault()}>

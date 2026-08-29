@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { apiErrorResponse, jsonResponse, mockFetch, renderApp, seedSession } from "./harness";
+import { apiErrorResponse, fileResponse, jsonResponse, mockFetch, mockObjectUrl, renderApp, seedSession } from "./harness";
 import { PRODUCTS, catalogResponse, inventoryRow, movement, page } from "./catalog";
 
 function inventoryRoutes(overrides: (url: string, init?: RequestInit) => Response | undefined = () => undefined) {
@@ -307,5 +307,28 @@ describe("Historial de movimientos", () => {
     renderApp("/inventario/movimientos");
 
     expect(await screen.findByText(/no hay movimientos que coincidan/i)).toBeInTheDocument();
+  });
+
+  it("exporta a Excel con el rango de fechas elegido y descarga el archivo con su nombre legible", async () => {
+    seedSession("OPERATOR");
+    const { createObjectURL, downloadedFilenames } = mockObjectUrl();
+    const fetchSpy = mockFetch(inventoryRoutes((url) =>
+      url.includes("/reports/inventory-movements/export") ? fileResponse("movimientos-inventario-20260829.xlsx") : undefined,
+    ));
+    renderApp("/inventario/movimientos");
+
+    await screen.findByRole("table");
+    await userEvent.click(screen.getByRole("button", { name: /exportar a excel/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/desde/i), { target: { value: "2026-08-01" } });
+    fireEvent.change(within(dialog).getByLabelText(/hasta/i), { target: { value: "2026-08-31" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^exportar$/i }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/reports/inventory-movements/export?"))).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // El backend manda el nombre dos veces (RFC 2047 y RFC 5987, ver httpClient.ts);
+    // debe preferirse la extendida, nunca la codificada `=?UTF-8?Q?...?=`.
+    expect(downloadedFilenames).toEqual(["movimientos-inventario-20260829.xlsx"]);
   });
 });

@@ -102,3 +102,64 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   throw apiError;
 }
+
+export interface DownloadResult {
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * Descarga binaria (los reportes exportables, BR-056: siempre `.xlsx`, nunca
+ * JSON). No reutiliza {@link apiRequest} porque una respuesta exitosa no es
+ * un cuerpo JSON sino un `Blob`, y el nombre de archivo viaja en
+ * `Content-Disposition`, no en el cuerpo — el resto (adjuntar token,
+ * normalizar el error a {@link ApiError}, avisar en un 401) es igual.
+ */
+export async function apiDownload(path: string, options: { query?: RequestOptions["query"] } = {}): Promise<DownloadResult> {
+  const headers: Record<string, string> = {};
+  const token = getStoredToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path, options.query), { method: "GET", headers });
+  } catch (cause) {
+    throw ApiError.network(cause);
+  }
+
+  if (!response.ok) {
+    let apiError: ApiError;
+    try {
+      apiError = ApiError.fromBody(response.status, (await response.json()) as ApiErrorBody);
+    } catch {
+      apiError = ApiError.malformed(response.status);
+    }
+    if (apiError.isUnauthorized) {
+      onUnauthorized();
+    }
+    throw apiError;
+  }
+
+  const blob = await response.blob();
+  const filename = filenameFrom(response.headers.get("Content-Disposition"));
+  return { blob, filename };
+}
+
+/**
+ * El backend manda dos formas de `filename` en `Content-Disposition`: la
+ * simple (`filename="=?UTF-8?Q?...?="`, RFC 2047 — para clientes viejos que
+ * no entienden la extendida) y la extendida (`filename*=UTF-8''...`, RFC
+ * 5987 — UTF-8 real, solo percent-encoded). Hay que preferir siempre la
+ * extendida: la simple aquí NO es el nombre de archivo en texto plano, es la
+ * forma *encoded-word* de RFC 2047, y tomarla tal cual dejaría el archivo
+ * descargado con un nombre ilegible como `=?UTF-8?Q?movimientos...?=`.
+ */
+function filenameFrom(disposition: string | null): string {
+  if (!disposition) return "reporte.xlsx";
+  const extended = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (extended) return decodeURIComponent(extended[1].trim());
+  const simple = /filename="?([^";]+)"?/i.exec(disposition);
+  return simple ? simple[1] : "reporte.xlsx";
+}

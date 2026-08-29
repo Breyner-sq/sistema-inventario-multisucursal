@@ -2,11 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
+import { exportTransfers } from "../../api/endpoints/reports";
 import { listTransfers } from "../../api/endpoints/transfers";
 import { queryKeys } from "../../api/queryClient";
 import { canTransfers } from "../../auth/permissions";
 import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
+import { ExportDialog } from "../../components/ui/ExportDialog";
 import { Pagination } from "../../components/ui/Pagination";
 import { useTransferRealtime } from "../../hooks/useTransferRealtime";
 import type { TransferStatus } from "../../types/api";
@@ -42,6 +44,7 @@ export function TransfersPage() {
   const [role, setRole] = useState<"" | "origin" | "destination">("");
   const [status, setStatus] = useState<TransferStatus | "">("");
   const [page, setPage] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const branchesQuery = useQuery({ queryKey: queryKeys.branches({ active: true }), queryFn: () => listBranches({ active: true }) });
   const branchesById = new Map((branchesQuery.data?.content ?? []).map((branch) => [branch.id, branch]));
@@ -64,12 +67,27 @@ export function TransfersPage() {
     <section>
       <div className="page__header">
         <h1>Transferencias</h1>
-        {canRequest ? (
-          <Link to="/transferencias/nueva">
-            <button type="button">Solicitar transferencia</button>
-          </Link>
-        ) : null}
+        <div className="page__actions">
+          <button type="button" onClick={() => setExporting(true)}>
+            Exportar a Excel
+          </button>
+          {canRequest ? (
+            <Link to="/transferencias/nueva">
+              <button type="button">Solicitar transferencia</button>
+            </Link>
+          ) : null}
+        </div>
       </div>
+
+      {exporting ? (
+        <ExportDialog
+          title="Exportar transferencias"
+          onClose={() => setExporting(false)}
+          onExport={(range) =>
+            exportTransfers({ branchId: isAdmin ? branchId || undefined : undefined, status: status || undefined, ...range })
+          }
+        />
+      ) : null}
 
       <form className="filters" onSubmit={(event) => event.preventDefault()}>
         {isAdmin ? (

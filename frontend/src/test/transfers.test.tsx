@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   apiErrorResponse,
+  fileResponse,
   jsonResponse,
   mockEventSource,
   mockFetch,
   MockEventSource,
+  mockObjectUrl,
   renderApp,
   seedSession,
 } from "./harness";
@@ -51,6 +53,26 @@ describe("Listado de transferencias", () => {
     renderApp("/transferencias");
 
     expect(await screen.findByRole("button", { name: /solicitar transferencia/i })).toBeInTheDocument();
+  });
+
+  it("exporta a Excel con el rango de fechas elegido y descarga el archivo", async () => {
+    seedSession("OPERATOR");
+    const { createObjectURL } = mockObjectUrl();
+    const fetchSpy = mockFetch(
+      transferRoutes((url) => (url.includes("/reports/transfers/export") ? fileResponse("transferencias.xlsx") : undefined)),
+    );
+    renderApp("/transferencias");
+
+    await screen.findByText("TR-ABC12345");
+    await userEvent.click(screen.getByRole("button", { name: /exportar a excel/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/desde/i), { target: { value: "2026-08-01" } });
+    fireEvent.change(within(dialog).getByLabelText(/hasta/i), { target: { value: "2026-08-31" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^exportar$/i }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/reports/transfers/export?"))).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 

@@ -62,6 +62,45 @@ export function apiErrorResponse(status: number, code: string, message: string):
   return jsonResponse(status, { error: { code, message, status, requestId: "req-de-prueba" } });
 }
 
+/**
+ * Respuesta binaria simulada de un reporte exportable (BR-056): el nombre de
+ * archivo viaja en `Content-Disposition`, nunca en el cuerpo. Se reproduce el
+ * formato real del backend —simple (RFC 2047, `=?UTF-8?Q?...?=`) *y*
+ * extendida (RFC 5987, `filename*=UTF-8''...`) a la vez— porque un cliente
+ * que solo mire la primera se queda con el nombre codificado, no el legible.
+ */
+export function fileResponse(filename: string): Response {
+  return new Response("contenido-del-excel", {
+    status: 200,
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="=?UTF-8?Q?${filename}?="; filename*=UTF-8''${filename}`,
+    },
+  });
+}
+
+/**
+ * `URL.createObjectURL`/`revokeObjectURL` no existen en jsdom; el diálogo de
+ * exportación los usa para disparar la descarga del navegador tras un click
+ * real del usuario. Se sustituyen por dobles inertes solo para la prueba.
+ * También se anula `HTMLAnchorElement.prototype.click`: jsdom sí lo ejecuta,
+ * pero al intentar interpretar el `href` (una URL `blob:` simulada) como una
+ * navegación real registra un "Not implemented: navigation" en consola que no
+ * es un fallo de la prueba, solo ruido de un enlace que en un navegador real
+ * jamás navega (tiene `download`).
+ */
+export function mockObjectUrl() {
+  const createObjectURL = vi.fn(() => "blob:mock-url");
+  const revokeObjectURL = vi.fn();
+  URL.createObjectURL = createObjectURL;
+  URL.revokeObjectURL = revokeObjectURL;
+  const downloadedFilenames: string[] = [];
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+    downloadedFilenames.push(this.download);
+  });
+  return { createObjectURL, revokeObjectURL, click, downloadedFilenames };
+}
+
 /** Reemplaza `fetch` por una función que responde según la ruta pedida. */
 export function mockFetch(handler: (url: string, init?: RequestInit) => Response | Promise<Response>) {
   const spy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(handler(String(input), init)));

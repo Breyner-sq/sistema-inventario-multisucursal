@@ -4,8 +4,10 @@ import { Link, useSearchParams } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
 import { listMovements } from "../../api/endpoints/inventory";
 import { listProductUnits } from "../../api/endpoints/products";
+import { exportInventoryMovements } from "../../api/endpoints/reports";
 import { queryKeys } from "../../api/queryClient";
 import { AsyncBoundary } from "../../components/state/states";
+import { ExportDialog } from "../../components/ui/ExportDialog";
 import { Pagination } from "../../components/ui/Pagination";
 import type { InventoryMovement, MovementReason } from "../../types/api";
 import { productLabel, useProductIndex, useUnitsOfMeasure } from "../products/useCatalog";
@@ -43,6 +45,7 @@ export function MovementsPage() {
   const productId = searchParams.get("productId") ?? "";
   const reason = searchParams.get("reason") ?? "";
   const [page, setPage] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const branchesQuery = useQuery({
     queryKey: queryKeys.branches({ active: true }),
@@ -104,8 +107,28 @@ export function MovementsPage() {
     <section>
       <div className="page__header">
         <h1>Movimientos de inventario</h1>
-        <Link to="/inventario">Volver a inventario</Link>
+        <div className="page__actions">
+          <button type="button" onClick={() => setExporting(true)}>
+            Exportar a Excel
+          </button>
+          <Link to="/inventario">Volver a inventario</Link>
+        </div>
       </div>
+
+      {exporting ? (
+        <ExportDialog
+          title="Exportar movimientos de inventario"
+          onClose={() => setExporting(false)}
+          onExport={(range) =>
+            exportInventoryMovements({
+              branchId: branchId || undefined,
+              productId: productId || undefined,
+              reason: reason || undefined,
+              ...range,
+            })
+          }
+        />
+      ) : null}
 
       <form className="filters" onSubmit={(event) => event.preventDefault()}>
         <div className="field">

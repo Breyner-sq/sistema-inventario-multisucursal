@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
-import { getLogisticsCompliance } from "../../api/endpoints/reports";
+import { exportLogisticsCompliance, getLogisticsCompliance } from "../../api/endpoints/reports";
 import { listRoutes } from "../../api/endpoints/routes";
 import { queryKeys } from "../../api/queryClient";
 import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
+import { ExportDialog } from "../../components/ui/ExportDialog";
 import type { ComplianceMetrics } from "../../types/api";
 import { ROUTE_CLASSIFICATION_LABELS } from "./routeLabels";
 
@@ -52,6 +53,7 @@ export function LogisticsCompliancePage() {
   const [routeId, setRouteId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   const branchesQuery = useQuery({ queryKey: queryKeys.branches({ active: true }), queryFn: () => listBranches({ active: true }) });
   const routesQuery = useQuery({ queryKey: queryKeys.routes({ size: 100 }), queryFn: () => listRoutes({ size: 100 }) });
@@ -69,8 +71,23 @@ export function LogisticsCompliancePage() {
     <section>
       <div className="page__header">
         <h1>Cumplimiento logístico</h1>
-        <Link to="/logistica/rutas">Rutas</Link>
+        <div className="page__actions">
+          <button type="button" onClick={() => setExporting(true)}>
+            Exportar a Excel
+          </button>
+          <Link to="/logistica/rutas">Rutas</Link>
+        </div>
       </div>
+
+      {exporting ? (
+        <ExportDialog
+          title="Exportar cumplimiento logístico"
+          onClose={() => setExporting(false)}
+          defaultDateFrom={dateFrom}
+          defaultDateTo={dateTo}
+          onExport={(range) => exportLogisticsCompliance({ branchId: branchId || undefined, routeId: routeId || undefined, ...range })}
+        />
+      ) : null}
 
       <form className="filters" onSubmit={(event) => event.preventDefault()}>
         <div className="field">

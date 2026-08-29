@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { apiErrorResponse, jsonResponse, mockFetch, renderApp, seedSession } from "./harness";
+import { apiErrorResponse, fileResponse, jsonResponse, mockFetch, mockObjectUrl, renderApp, seedSession } from "./harness";
 import { catalogResponse, logisticsCompliance, page } from "./catalog";
 
 function routeRoutes(overrides: (url: string, init?: RequestInit) => Response | undefined = () => undefined) {
@@ -141,5 +141,29 @@ describe("Cumplimiento logístico", () => {
     renderApp("/logistica/cumplimiento");
 
     expect(await screen.findByText(/no hay transferencias despachadas/i)).toBeInTheDocument();
+  });
+
+  it("exporta a Excel con el rango de fechas elegido y descarga el archivo", async () => {
+    seedSession("MANAGER");
+    const { createObjectURL } = mockObjectUrl();
+    const fetchSpy = mockFetch(
+      routeRoutes((url) => {
+        if (url.includes("/reports/logistics-compliance/export")) return fileResponse("cumplimiento.xlsx");
+        if (url.includes("/reports/logistics-compliance")) return jsonResponse(200, logisticsCompliance());
+        return undefined;
+      }),
+    );
+    renderApp("/logistica/cumplimiento");
+
+    await screen.findByText("Resumen");
+    await userEvent.click(screen.getByRole("button", { name: /exportar a excel/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/desde/i), { target: { value: "2026-08-01" } });
+    fireEvent.change(within(dialog).getByLabelText(/hasta/i), { target: { value: "2026-08-31" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^exportar$/i }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/reports/logistics-compliance/export?"))).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

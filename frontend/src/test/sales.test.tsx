@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { apiErrorResponse, jsonResponse, mockFetch, renderApp, seedSession, selectOption } from "./harness";
+import { apiErrorResponse, fileResponse, jsonResponse, mockFetch, mockObjectUrl, renderApp, seedSession, selectOption } from "./harness";
 import { PRODUCTS, catalogResponse, inventoryRow, page, sale } from "./catalog";
 
 function saleRoutes(overrides: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined = () => undefined) {
@@ -36,6 +36,24 @@ describe("Listado de ventas", () => {
     renderApp("/ventas");
 
     expect(await screen.findByText(/no hay ventas registradas/i)).toBeInTheDocument();
+  });
+
+  it("exporta a Excel con el rango de fechas elegido y descarga el archivo", async () => {
+    seedSession("OPERATOR");
+    const { createObjectURL } = mockObjectUrl();
+    const fetchSpy = mockFetch(saleRoutes((url) => (url.includes("/reports/sales/export") ? fileResponse("ventas.xlsx") : undefined)));
+    renderApp("/ventas");
+
+    await screen.findByText("V-ABC12345");
+    await userEvent.click(screen.getByRole("button", { name: /exportar a excel/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/desde/i), { target: { value: "2026-08-01" } });
+    fireEvent.change(within(dialog).getByLabelText(/hasta/i), { target: { value: "2026-08-31" } });
+    await userEvent.click(within(dialog).getByRole("button", { name: /^exportar$/i }));
+
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/reports/sales/export?"))).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   describe("permisos visuales", () => {
