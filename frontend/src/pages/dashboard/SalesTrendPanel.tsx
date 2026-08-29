@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getSalesSummary } from "../../api/endpoints/dashboard";
 import { queryKeys } from "../../api/queryClient";
 import { AsyncBoundary } from "../../components/state/states";
+import { formatCurrency } from "../../lib/currency";
 import { MiniBarChart } from "./MiniBarChart";
 
 /**
@@ -22,12 +23,12 @@ export function SalesTrendPanel({ branchId, months }: { branchId: string; months
           const bars = [...trend.previousMonths, trend.currentMonth].map((month) => ({ label: month.period, value: Number(month.totalSales) }));
           return (
             <>
-              <MiniBarChart bars={bars} formatValue={(value) => value.toFixed(0)} />
+              <MiniBarChart bars={bars} formatValue={formatCurrency} />
               <dl className="detail-grid">
                 <div>
                   <dt>Mes actual ({trend.currentMonth.period})</dt>
                   <dd>
-                    {trend.currentMonth.totalSales} ({trend.currentMonth.salesCount} venta(s))
+                    {formatCurrency(trend.currentMonth.totalSales)} ({trend.currentMonth.salesCount} venta(s))
                   </dd>
                 </div>
                 <div>

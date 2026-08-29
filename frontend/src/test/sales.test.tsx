@@ -27,7 +27,7 @@ describe("Listado de ventas", () => {
     const row = (await screen.findByText("V-ABC12345")).closest("tr")!;
     expect(within(row).getByText("Sucursal Centro")).toBeInTheDocument();
     expect(within(row).getByText("Operador Centro")).toBeInTheDocument();
-    expect(within(row).getByText("150")).toBeInTheDocument();
+    expect(within(row).getByText(/\$\s*150/)).toBeInTheDocument();
   });
 
   it("muestra el estado vacío cuando no hay ventas", async () => {
@@ -91,7 +91,28 @@ describe("Nueva venta", () => {
     await selectOption(/producto de la línea 1/i, "10");
 
     const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
-    expect(await within(row).findByText("50")).toBeInTheDocument();
+    expect(await within(row).findByText(/\$\s*50/)).toBeInTheDocument();
+  });
+
+  it("escala el precio y el total de línea por el factor de conversión al elegir una unidad distinta a la base", async () => {
+    // El precio de lista (50) está fijado en la unidad base (UND); al elegir
+    // "Caja" (factor 12, ver PRODUCT_UNITS) el precio previsualizado debe
+    // multiplicarse por ese factor — 50 * 12 = 600 por caja — igual criterio
+    // que ya aplica MovementsPage a la cantidad equivalente en unidad base.
+    seedSession("OPERATOR");
+    mockFetch(saleRoutes());
+    renderApp("/ventas/nueva");
+
+    await selectOption(/producto de la línea 1/i, "10");
+    const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
+    expect(await within(row).findByText(/\$\s*50/)).toBeInTheDocument();
+
+    await selectOption(/unidad de la línea 1/i, "2");
+    expect(await within(row).findByText(/\$\s*600/)).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/cantidad de la línea 1/i), "2");
+    // 2 cajas * 600 = 1200
+    expect(await within(row).findByText(/\$\s*1\.200/)).toBeInTheDocument();
   });
 
   it("muestra el stock del producto seleccionado en la sucursal seleccionada", async () => {
@@ -115,7 +136,7 @@ describe("Nueva venta", () => {
 
     // 4 * 50 = 200, menos 10% = 180
     const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
-    expect(await within(row).findByText("180.00")).toBeInTheDocument();
+    expect(await within(row).findByText(/\$\s*180/)).toBeInTheDocument();
     expect(screen.getByText(/total estimado:/i)).toBeInTheDocument();
   });
 
@@ -254,7 +275,7 @@ describe("Comprobante de venta", () => {
     const row = screen.getByText(/SKU-001 — Cemento gris/).closest("tr")!;
     const cells = within(row).getAllByRole("cell");
     expect(cells[1]).toHaveTextContent("3"); // cantidad
-    expect(cells[5]).toHaveTextContent("150"); // total línea
+    expect(cells[5]).toHaveTextContent(/\$\s*150/); // total línea
     expect(cells[6]).toHaveTextContent("0"); // devuelto
     expect(cells[7]).toHaveTextContent("3"); // pendiente
   });

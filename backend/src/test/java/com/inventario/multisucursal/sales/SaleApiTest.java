@@ -137,6 +137,33 @@ class SaleApiTest {
     }
 
     @Test
+    void saleInAlternateUnitScalesPriceByConversionFactor() {
+        // BR-019: el precio de lista está fijado en la unidad base del producto;
+        // vender en una unidad alternativa (1 caja = 12 unidades) debe escalar el
+        // precio por el mismo factor que ya se aplica a la cantidad, igual que
+        // MovementsPage (frontend) ya hace para mostrar la equivalencia de cantidad.
+        String productId = createProduct("SKU-SALE-UNIT-001");
+        setPrice(productId, "10.00");
+        UnitOfMeasure cajaUnit = unitOfMeasureRepository.save(new UnitOfMeasure("CJ", "Caja"));
+        addProductUnit(productId, cajaUnit.getId(), "12.000000");
+        stockUp(productId, branchA.getId(), 120);
+
+        ResponseEntity<SaleResponse> response = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of(
+                                "productId", Long.valueOf(productId), "unitOfMeasureId", cajaUnit.getId(), "quantity", 2))),
+                operatorAToken, SaleResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        // 10.00 por unidad base * 12 (factor de la caja) = 120.00 por caja; 2 cajas -> 240.00.
+        assertThat(response.getBody().items().get(0).unitPrice()).isEqualByComparingTo(new BigDecimal("120.0000"));
+        assertThat(response.getBody().items().get(0).lineTotal()).isEqualByComparingTo(new BigDecimal("240.0000"));
+        assertThat(response.getBody().total()).isEqualByComparingTo(new BigDecimal("240.0000"));
+        // 2 cajas * 12 = 24 unidades base descontadas del stock.
+        assertThat(stockOf(productId, branchA.getId())).isEqualByComparingTo(new BigDecimal("96"));
+    }
+
+    @Test
     void validSaleOfMultipleProducts() {
         String productA = createProduct("SKU-SALE-002A");
         String productB = createProduct("SKU-SALE-002B");
@@ -649,6 +676,12 @@ class SaleApiTest {
         restTemplate.exchange("/api/v1/price-lists/" + priceListId + "/prices", HttpMethod.POST,
                 new HttpEntity<>(Map.of("productId", Long.valueOf(productId), "unitPrice", new BigDecimal(unitPrice)), headers),
                 PriceResponse.class);
+    }
+
+    private void addProductUnit(String productId, Long unitOfMeasureId, String conversionFactor) {
+        restTemplate.exchange("/api/v1/products/" + productId + "/units", HttpMethod.POST,
+                new HttpEntity<>(Map.of("unitOfMeasureId", unitOfMeasureId, "conversionFactorToBase", new BigDecimal(conversionFactor)), authHeaders(operatorAToken)),
+                Object.class);
     }
 
     private void stockUp(String productId, Long branchId, int quantity) {

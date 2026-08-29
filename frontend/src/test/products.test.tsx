@@ -35,7 +35,7 @@ describe("Pantalla de productos", () => {
 
     const row = (await screen.findByText("SKU-001")).closest("tr")!;
     expect(within(row).getByText("10")).toBeInTheDocument();
-    expect(within(row).getByText("50")).toBeInTheDocument();
+    expect(within(row).getByText(/\$\s*50/)).toBeInTheDocument();
 
     // SKU-002 no tiene precio configurado: se avisa en vez de mostrar vacío.
     const rowWithoutPrice = screen.getByText("SKU-002").closest("tr")!;

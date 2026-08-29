@@ -11,6 +11,7 @@ import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
+import { formatCurrency } from "../../lib/currency";
 import { productLabel, useProductIndex, useUnitsOfMeasure } from "../products/useCatalog";
 import type { ReceiptItemRequest } from "../../types/api";
 import { useActiveSuppliers } from "./useSuppliers";
@@ -146,7 +147,7 @@ export function PurchaseOrderDetailPage() {
                 <div><dt>Fecha</dt><dd>{new Date(order.orderDate).toLocaleString()}</dd></div>
                 <div><dt>Condición de pago</dt><dd>{order.paymentTerm ?? "—"}</dd></div>
                 <div><dt>Estado</dt><dd><span className="badge badge--ok">{PURCHASE_STATUS_LABELS[order.status]}</span></dd></div>
-                <div><dt>Total</dt><dd>{orderTotal(order.items).toFixed(2)}</dd></div>
+                <div><dt>Total</dt><dd>{formatCurrency(orderTotal(order.items))}</dd></div>
               </dl>
 
               {canWrite && order.status === "CREATED" ? (
@@ -179,9 +180,9 @@ export function PurchaseOrderDetailPage() {
                       <td>{item.quantityOrdered}</td>
                       <td>{item.quantityReceived}</td>
                       <td>{item.pending}</td>
-                      <td>{item.unitPrice}</td>
+                      <td>{formatCurrency(item.unitPrice)}</td>
                       <td>{item.discountPercentage}</td>
-                      <td>{item.lineTotal}</td>
+                      <td>{formatCurrency(item.lineTotal)}</td>
                       {canReceive ? (
                         <td>
                           {item.pending > 0 ? (
@@ -195,7 +196,7 @@ export function PurchaseOrderDetailPage() {
                               />
                               <input
                                 aria-label={`Precio de recepción de ${item.productId}`}
-                                placeholder={`Precio (${item.unitPrice})`}
+                                placeholder={`Precio (${formatCurrency(item.unitPrice)})`}
                                 inputMode="decimal"
                                 value={draft[item.id]?.unitPrice ?? ""}
                                 onChange={(event) => updateDraft(item.id, { unitPrice: event.target.value })}
@@ -238,7 +239,7 @@ export function PurchaseOrderDetailPage() {
                     {receiptItems.map(({ item, quantityReceived, unitPrice }) => (
                       <li key={item.id}>
                         {productLabel(productsById.get(item.productId), item.productId)}: {quantityReceived}{" "}
-                        {unitsById.get(item.unitOfMeasureId)?.code} a {unitPrice} c/u
+                        {unitsById.get(item.unitOfMeasureId)?.code} a {formatCurrency(Number(unitPrice))} c/u
                       </li>
                     ))}
                   </ul>

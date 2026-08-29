@@ -9,6 +9,7 @@ import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Pagination } from "../../components/ui/Pagination";
+import { formatCurrency } from "../../lib/currency";
 import type { PurchaseOrder, PurchaseOrderStatus } from "../../types/api";
 import { productLabel, useProductIndex } from "../products/useCatalog";
 import { useActiveSuppliers } from "./useSuppliers";
@@ -196,7 +197,7 @@ export function PurchaseOrdersPage() {
                         {PURCHASE_STATUS_LABELS[order.status]}
                       </span>
                     </td>
-                    <td>{orderTotal(order.items).toFixed(2)}</td>
+                    <td>{formatCurrency(orderTotal(order.items))}</td>
                     <td className="row__actions">
                       <Link to={`/compras/${order.id}`}>Ver</Link>
                       {canWrite && order.status === "CREATED" ? (

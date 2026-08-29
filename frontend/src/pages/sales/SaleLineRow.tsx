@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { listProductUnits } from "../../api/endpoints/products";
 import { queryKeys } from "../../api/queryClient";
-import type { Product } from "../../types/api";
+import { formatCurrency } from "../../lib/currency";
+import type { Product, ProductUnit } from "../../types/api";
 
 export interface SaleLineDraft {
   productId: string;
@@ -12,6 +13,24 @@ export interface SaleLineDraft {
 
 export function emptySaleLine(): SaleLineDraft {
   return { productId: "", unitOfMeasureId: "", quantity: "", discountPercentage: "" };
+}
+
+/** Precio unitario efectivo para la unidad elegida en la línea: el precio de
+ * lista está fijado en la unidad base del producto (RF-011); si la línea usa
+ * una unidad alternativa, se escala por el mismo factor de conversión que el
+ * backend aplica al confirmar la venta (BR-019) — la misma idea que ya usa el
+ * historial de movimientos (`MovementsPage.baseUnitEquivalent`) para mostrar
+ * el equivalente en unidad base, aplicada aquí al precio en vez de a la
+ * cantidad. */
+export function resolveEffectiveUnitPrice(
+  basePrice: number | undefined,
+  units: ProductUnit[],
+  unitOfMeasureId: string,
+): number | undefined {
+  if (basePrice === undefined || !unitOfMeasureId) return basePrice;
+  const unit = units.find((candidate) => candidate.unitOfMeasureId === unitOfMeasureId);
+  if (!unit || unit.baseUnit) return basePrice;
+  return Number((basePrice * unit.conversionFactorToBase).toFixed(4));
 }
 
 /** Total de línea **previsualizado en el cliente**: aritmética simple para
@@ -40,6 +59,7 @@ export function SaleLineRow({
   line: SaleLineDraft;
   index: number;
   products: Product[];
+  /** Precio unitario ya ajustado a la unidad elegida en esta línea (ver {@link resolveEffectiveUnitPrice}). */
   unitPrice: number | undefined;
   /** Stock del producto en la sucursal elegida — solo previsualización, el backend vuelve a validar disponibilidad al confirmar. */
   stockOnHand: number | undefined;
@@ -99,7 +119,7 @@ export function SaleLineRow({
         {errors.quantity ? <span role="alert" className="field__error">{errors.quantity}</span> : null}
       </td>
       <td>
-        {line.productId ? (unitPrice !== undefined ? unitPrice : "Sin precio vigente") : "—"}
+        {line.productId ? (unitPrice !== undefined ? formatCurrency(unitPrice) : "Sin precio vigente") : "—"}
         {errors.price ? <span role="alert" className="field__error">{errors.price}</span> : null}
       </td>
       <td>
@@ -110,7 +130,7 @@ export function SaleLineRow({
           onChange={(event) => onChange(index, { discountPercentage: event.target.value })}
         />
       </td>
-      <td>{preview !== null ? preview.toFixed(2) : "—"}</td>
+      <td>{preview !== null ? formatCurrency(preview) : "—"}</td>
       <td>
         <button type="button" onClick={() => onRemove(index)} disabled={!canRemove}>
           Quitar

@@ -88,9 +88,13 @@ describe("Comparativa entre sucursales", () => {
     const table = await screen.findByRole("table");
     const rowA = within(table).getByText("Sucursal Centro").closest("tr")!;
     const rowB = within(table).getByText("Sucursal Norte").closest("tr")!;
-    expect(within(rowA).getByText("150")).toBeInTheDocument();
+    expect(within(rowA).getByText(/\$\s*150/)).toBeInTheDocument();
     // Las tres métricas de esta sucursal son 0: confirmamos que la fila no se
-    // omite (BR-043) contando las tres celdas, no una sola "0" ambigua.
-    expect(within(rowB).getAllByText("0")).toHaveLength(3);
+    // omite (BR-043) contando las tres celdas, no una sola "0" ambigua. Las
+    // ventas del mes se muestran en formato de moneda ("$ 0"), así que solo
+    // las otras dos (transferencias activas, productos bajo mínimo) quedan
+    // como "0" sin formato.
+    expect(within(rowB).getByText(/\$\s*0/)).toBeInTheDocument();
+    expect(within(rowB).getAllByText("0")).toHaveLength(2);
   });
 });

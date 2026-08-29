@@ -9,6 +9,7 @@ import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
 import { Pagination } from "../../components/ui/Pagination";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { formatCurrency } from "../../lib/currency";
 import type { InventoryRow } from "../../types/api";
 import { productLabel, useProductIndex } from "../products/useCatalog";
 import { AdjustmentDialog } from "./AdjustmentDialog";
@@ -145,7 +146,7 @@ export function InventoryPage() {
                           {low ? "Reabastecer" : "Normal"}
                         </span>
                       </td>
-                      <td>{row.averageUnitCost}</td>
+                      <td>{formatCurrency(row.averageUnitCost)}</td>
                       <td className="row__actions">
                         <Link to={`/inventario/movimientos?branchId=${row.branchId}&productId=${row.productId}`}>
                           Movimientos

@@ -268,7 +268,7 @@ Si `Inventory` y `InventoryMovement` llegaran a divergir (por un bug), `Inventor
 ### 3.4 Cómo conservar precios históricos de compras y ventas
 
 - **Compras:** `PurchaseOrderItem.unit_price` y `discount_percentage` se fijan al crear la línea y nunca se modifican — son la condición pactada en ese momento (RF-013), independiente de si el costo de referencia del producto cambia después.
-- **Ventas:** `SaleItem.unit_price` se copia desde `Price` vigente al momento de confirmar la venta y tampoco se modifica después.
+- **Ventas:** `SaleItem.unit_price` se copia desde `Price` vigente al momento de confirmar la venta —escalado por `conversion_factor_to_base` si la línea usa una unidad distinta de la base del producto, ver BR-019— y tampoco se modifica después.
 - **Listas de precios:** `Price` es una tabla de versiones inmutables (`valid_from`/`valid_to`); "cambiar un precio" es cerrar la versión vigente e insertar una nueva, nunca sobrescribir `unit_price` de una fila existente (ver ficha 2.14).
 
 ### 3.5 Cómo modelar transferencias y sus estados

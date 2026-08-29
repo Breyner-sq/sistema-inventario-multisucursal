@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
 import { listInventory } from "../../api/endpoints/inventory";
-import { listProducts } from "../../api/endpoints/products";
+import { listProducts, listProductUnits } from "../../api/endpoints/products";
 import { createSale } from "../../api/endpoints/sales";
 import { queryKeys, queryPrefixes } from "../../api/queryClient";
 import { useAuth } from "../../auth/useAuth";
@@ -12,9 +12,10 @@ import { FormErrorMessage } from "../../components/form/Field";
 import { toFormErrors } from "../../components/form/formErrors";
 import { Modal } from "../../components/ui/Modal";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
+import { formatCurrency } from "../../lib/currency";
 import type { CreateSaleItemRequest } from "../../types/api";
 import { productLabel } from "../products/useCatalog";
-import { SaleLineRow, emptySaleLine, previewLineTotal } from "./SaleLineRow";
+import { SaleLineRow, emptySaleLine, previewLineTotal, resolveEffectiveUnitPrice } from "./SaleLineRow";
 import type { SaleLineDraft } from "./SaleLineRow";
 import { useApplicablePriceLists, usePrices } from "./usePriceLists";
 
@@ -48,6 +49,31 @@ export function NewSalePage() {
 
   const priceListsQuery = useApplicablePriceLists(branchId);
   const pricesQuery = usePrices(priceListId);
+
+  // El precio de lista está fijado en la unidad base del producto: si una
+  // línea usa una unidad alternativa, el precio previsualizado debe escalarse
+  // por el mismo factor de conversión que ya aplica el backend al confirmar
+  // (BR-019) — se resuelven las unidades de los productos presentes en el
+  // formulario, mismo patrón de `useQueries` que `MovementsPage`.
+  const lineProductIds = Array.from(new Set(lines.map((line) => line.productId).filter((id) => id !== "")));
+  const productUnitQueries = useQueries({
+    queries: lineProductIds.map((id) => ({
+      queryKey: queryKeys.productUnits(id),
+      queryFn: () => listProductUnits(id),
+      staleTime: 60_000,
+    })),
+  });
+  const productUnitsByProductId = new Map(
+    lineProductIds.map((id, index) => [id, productUnitQueries[index]?.data ?? []]),
+  );
+
+  function effectiveUnitPriceFor(line: SaleLineDraft): number | undefined {
+    return resolveEffectiveUnitPrice(
+      pricesQuery.byProductId.get(line.productId),
+      productUnitsByProductId.get(line.productId) ?? [],
+      line.unitOfMeasureId,
+    );
+  }
 
   // Stock de la sucursal elegida, para mostrarlo junto a cada línea antes de
   // confirmar — el backend vuelve a validar disponibilidad al confirmar
@@ -132,8 +158,7 @@ export function NewSalePage() {
   }
 
   const previewTotal = lines.reduce((sum, line) => {
-    const price = pricesQuery.byProductId.get(line.productId);
-    const lineTotal = previewLineTotal(line.quantity, price, line.discountPercentage);
+    const lineTotal = previewLineTotal(line.quantity, effectiveUnitPriceFor(line), line.discountPercentage);
     return sum + (lineTotal ?? 0);
   }, 0);
 
@@ -195,7 +220,7 @@ export function NewSalePage() {
                   line={line}
                   index={index}
                   products={products}
-                  unitPrice={pricesQuery.byProductId.get(line.productId)}
+                  unitPrice={effectiveUnitPriceFor(line)}
                   stockOnHand={stockByProductId.get(line.productId)}
                   onChange={updateLine}
                   onRemove={removeLine}
@@ -211,7 +236,7 @@ export function NewSalePage() {
         </button>
 
         <p className="sale-total">
-          Total estimado: <strong>{previewTotal.toFixed(2)}</strong>
+          Total estimado: <strong>{formatCurrency(previewTotal)}</strong>
           <span className="state__hint"> — el total definitivo lo calcula el servidor al confirmar.</span>
         </p>
 
@@ -239,7 +264,7 @@ export function NewSalePage() {
             ))}
           </ul>
           <p>
-            Total estimado: <strong>{previewTotal.toFixed(2)}</strong>
+            Total estimado: <strong>{formatCurrency(previewTotal)}</strong>
           </p>
           <FormErrorMessage error={mutation.error} />
           <div className="modal__actions">

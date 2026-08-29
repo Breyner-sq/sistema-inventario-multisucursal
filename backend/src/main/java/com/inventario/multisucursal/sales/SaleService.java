@@ -155,10 +155,18 @@ public class SaleService {
             BigDecimal conversionFactor = resolveConversionFactor(product, unitOfMeasureId);
             BigDecimal quantityBase = itemRequest.quantity().multiply(conversionFactor).setScale(QUANTITY_SCALE, ROUNDING);
 
-            BigDecimal unitPrice = priceRepository.findByPriceListIdAndProductIdAndValidToIsNull(priceList.getId(), product.getId())
+            BigDecimal listUnitPrice = priceRepository.findByPriceListIdAndProductIdAndValidToIsNull(priceList.getId(), product.getId())
                     .map(Price::getUnitPrice)
                     .orElseThrow(() -> new BusinessRuleViolationException(
                             "PRECIO_NO_ENCONTRADO", "No hay un precio vigente para el producto en la lista de precios aplicada."));
+            // BR-019: el precio de lista está fijado en la unidad base del producto
+            // (RF-011); si la línea usa una unidad alternativa, se escala por el
+            // mismo factor de conversión ya aplicado a la cantidad — igual idea que
+            // PurchaseReceiptService.applyInventoryReceipt ya usa para el costo
+            // promedio ponderado, aquí sobre el precio de venta.
+            BigDecimal unitPrice = conversionFactor.compareTo(BigDecimal.ONE) == 0
+                    ? listUnitPrice
+                    : listUnitPrice.multiply(conversionFactor).setScale(MONEY_SCALE, ROUNDING);
 
             BigDecimal discount = itemRequest.discountPercentage() != null ? itemRequest.discountPercentage() : BigDecimal.ZERO;
             BigDecimal lineSubtotal = unitPrice.multiply(itemRequest.quantity());

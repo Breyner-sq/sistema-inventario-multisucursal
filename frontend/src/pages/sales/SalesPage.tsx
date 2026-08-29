@@ -10,6 +10,7 @@ import { useAuth } from "../../auth/useAuth";
 import { AsyncBoundary } from "../../components/state/states";
 import { ExportDialog } from "../../components/ui/ExportDialog";
 import { Pagination } from "../../components/ui/Pagination";
+import { formatCurrency } from "../../lib/currency";
 
 const PAGE_SIZE = 10;
 
@@ -108,7 +109,7 @@ export function SalesPage() {
                     <td>{branchesById.get(sale.branchId)?.name ?? sale.branchId}</td>
                     <td>{new Date(sale.saleDate).toLocaleString()}</td>
                     <td>{sale.soldByUserName ?? sale.soldByUserId}</td>
-                    <td>{sale.total}</td>
+                    <td>{formatCurrency(sale.total)}</td>
                     <td>
                       <Link to={`/ventas/${sale.id}`}>Ver comprobante</Link>
                     </td>

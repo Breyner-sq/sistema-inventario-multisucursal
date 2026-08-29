@@ -9,6 +9,7 @@ import { AsyncBoundary } from "../../components/state/states";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Pagination } from "../../components/ui/Pagination";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { formatCurrency } from "../../lib/currency";
 import type { Product } from "../../types/api";
 import { ProductFormDialog } from "./ProductFormDialog";
 import { ProductUnitsDialog } from "./ProductUnitsDialog";
@@ -131,7 +132,7 @@ export function ProductsPage() {
                     </td>
                     <td>{unitsById.get(product.baseUnitOfMeasureId)?.code ?? product.baseUnitOfMeasureId}</td>
                     <td>{product.minimumStock}</td>
-                    <td>{product.salePrice != null ? product.salePrice : "Sin precio"}</td>
+                    <td>{product.salePrice != null ? formatCurrency(product.salePrice) : "Sin precio"}</td>
                     <td>
                       <span className={product.active ? "badge badge--ok" : "badge badge--muted"}>
                         {product.active ? "Activo" : "Inactivo"}

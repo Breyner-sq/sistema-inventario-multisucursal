@@ -27,7 +27,7 @@ describe("Listado de compras", () => {
     expect(within(row).getByText("Distribuidora Andina")).toBeInTheDocument();
     expect(within(row).getByText("Sucursal Centro")).toBeInTheDocument();
     expect(within(row).getByText("Creada")).toBeInTheDocument();
-    expect(within(row).getByText("310.00")).toBeInTheDocument();
+    expect(within(row).getByText(/\$\s*310/)).toBeInTheDocument();
   });
 
   it("muestra el estado vacío cuando no hay órdenes", async () => {
@@ -240,7 +240,7 @@ describe("Detalle de orden de compra", () => {
     await userEvent.click(screen.getByRole("button", { name: /continuar/i }));
 
     const confirmation = await screen.findByRole("dialog", { name: /confirmar recepción/i });
-    expect(confirmation).toHaveTextContent(/8 UND a 16/);
+    expect(confirmation).toHaveTextContent(/8 UND a \$\s*16/);
     await userEvent.click(within(confirmation).getByRole("button", { name: /registrar recepción/i }));
 
     const post = await waitFor(() => {

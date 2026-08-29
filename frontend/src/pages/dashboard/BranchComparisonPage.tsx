@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getBranchComparison } from "../../api/endpoints/dashboard";
 import { queryKeys } from "../../api/queryClient";
 import { AsyncBoundary } from "../../components/state/states";
+import { formatCurrency } from "../../lib/currency";
 
 /**
  * Comparativa entre sucursales (RF-035, BR-043) — solo `MANAGER`/`ADMIN`; la
@@ -44,7 +45,7 @@ export function BranchComparisonPage() {
               {result.branches.map((branch) => (
                 <tr key={branch.branchId}>
                   <td>{branch.branchName}</td>
-                  <td>{branch.currentMonthSales}</td>
+                  <td>{formatCurrency(branch.currentMonthSales)}</td>
                   <td>{branch.activeTransfersCount}</td>
                   <td>{branch.lowStockCount}</td>
                 </tr>

@@ -10,6 +10,7 @@ import { FormErrorMessage } from "../../components/form/Field";
 import { AsyncBoundary } from "../../components/state/states";
 import { Modal } from "../../components/ui/Modal";
 import { useIdempotencyKey } from "../../hooks/useIdempotencyKey";
+import { formatCurrency } from "../../lib/currency";
 import type { CreateSaleReturnItemRequest } from "../../types/api";
 import { productLabel, useProductIndex, useUnitsOfMeasure } from "../products/useCatalog";
 
@@ -148,9 +149,9 @@ export function SaleDetailPage() {
                       <td>{productLabel(productsById.get(item.productId), item.productId)}</td>
                       <td>{item.quantity}</td>
                       <td>{unitsById.get(item.unitOfMeasureId)?.code ?? item.unitOfMeasureId}</td>
-                      <td>{item.unitPrice}</td>
+                      <td>{formatCurrency(item.unitPrice)}</td>
                       <td>{item.discountPercentage}</td>
-                      <td>{item.lineTotal}</td>
+                      <td>{formatCurrency(item.lineTotal)}</td>
                       <td>{item.quantityReturned}</td>
                       <td>{item.pending}</td>
                     </tr>
@@ -160,9 +161,9 @@ export function SaleDetailPage() {
               </div>
 
               <dl className="detail-grid">
-                <div><dt>Subtotal</dt><dd>{sale.subtotal}</dd></div>
-                <div><dt>Descuento</dt><dd>{sale.discountTotal}</dd></div>
-                <div><dt>Total</dt><dd><strong>{sale.total}</strong></dd></div>
+                <div><dt>Subtotal</dt><dd>{formatCurrency(sale.subtotal)}</dd></div>
+                <div><dt>Descuento</dt><dd>{formatCurrency(sale.discountTotal)}</dd></div>
+                <div><dt>Total</dt><dd><strong>{formatCurrency(sale.total)}</strong></dd></div>
               </dl>
 
               {canReturnNow ? (
