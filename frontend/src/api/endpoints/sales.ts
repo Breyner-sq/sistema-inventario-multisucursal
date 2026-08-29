@@ -1,5 +1,5 @@
 import { apiRequest } from "../httpClient";
-import type { CreateSaleRequest, Page, Price, PriceList, Sale, SaleStatus } from "../../types/api";
+import type { CreateSaleRequest, CreateSaleReturnRequest, Page, Price, PriceList, Sale, SaleReturnResponse, SaleStatus } from "../../types/api";
 
 /** docs/API_DESIGN.md, sección 7.8. */
 
@@ -20,6 +20,11 @@ export function getSale(id: string): Promise<Sale> {
 
 export function createSale(body: CreateSaleRequest, idempotencyKey: string): Promise<Sale> {
   return apiRequest<Sale>("/sales", { method: "POST", body, idempotencyKey });
+}
+
+/** BR-052: devolución total o parcial de una venta confirmada — repone las líneas indicadas al inventario. */
+export function createSaleReturn(saleId: string, body: CreateSaleReturnRequest, idempotencyKey: string): Promise<SaleReturnResponse> {
+  return apiRequest<SaleReturnResponse>(`/sales/${saleId}/returns`, { method: "POST", body, idempotencyKey });
 }
 
 export function listPriceLists(params: { branchId?: string; active?: boolean } = {}): Promise<Page<PriceList>> {

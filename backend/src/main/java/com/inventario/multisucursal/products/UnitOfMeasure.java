@@ -9,9 +9,10 @@ import jakarta.persistence.Table;
 
 /**
  * Catálogo de unidades de medida (docs/DOMAIN_MODEL.md, sección 2.4; RF-011).
- * Sin columnas de auditoría ni de estado: el contrato aprobado
- * (docs/API_DESIGN.md, sección 7.4) solo define {@code GET} y {@code POST}
- * para este recurso — no hay actualización ni baja lógica que auditar.
+ * Sin columnas de auditoría ni de estado: no hay baja lógica. Sí admite
+ * editar {@code name} (BR-050, ampliación explícita del contrato original
+ * "solo GET/POST") — {@code code} es la clave de negocio y permanece
+ * inmutable después de creado, mismo criterio que {@code Product.sku}.
  */
 @Entity
 @Table(name = "unit_of_measure")
@@ -33,6 +34,10 @@ public class UnitOfMeasure {
 
     public UnitOfMeasure(String code, String name) {
         this.code = code;
+        this.name = name;
+    }
+
+    public void updateDetails(String name) {
         this.name = name;
     }
 

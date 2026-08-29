@@ -8,6 +8,7 @@ import { UnitsOfMeasurePage } from "./pages/products/UnitsOfMeasurePage";
 import { InventoryPage } from "./pages/inventory/InventoryPage";
 import { MovementsPage } from "./pages/inventory/MovementsPage";
 import { StockAlertsPage } from "./pages/inventory/StockAlertsPage";
+import { SuppliersPage } from "./pages/suppliers/SuppliersPage";
 import { PurchaseOrdersPage } from "./pages/purchases/PurchaseOrdersPage";
 import { NewPurchaseOrderPage } from "./pages/purchases/NewPurchaseOrderPage";
 import { PurchaseOrderDetailPage } from "./pages/purchases/PurchaseOrderDetailPage";
@@ -44,6 +45,9 @@ export default function App() {
           <Route path="/inventario/alertas" element={<StockAlertsPage />} />
           <Route path="/productos" element={<ProductsPage />} />
           <Route path="/productos/unidades" element={<UnitsOfMeasurePage />} />
+          {/* CRUD completo abierto a cualquier rol autenticado (BR-049) — no
+              hace falta guarda de rol, a diferencia del resto de módulos. */}
+          <Route path="/proveedores" element={<SuppliersPage />} />
           <Route path="/compras" element={<PurchaseOrdersPage />} />
           <Route path="/compras/:id" element={<PurchaseOrderDetailPage />} />
           <Route path="/ventas" element={<SalesPage />} />
@@ -61,12 +65,10 @@ export default function App() {
               derecho, no una vista mixta como /productos o /inventario: sin
               esta guarda, un rol sin permiso llegaría por URL a un formulario
               que parece operativo y solo fallaría con 403 al enviarlo.
-              Compras admite MANAGER (mismas capacidades que ADMIN); ventas no
-              cambió. */}
+              Compras y ventas admiten MANAGER (mismas capacidades que ADMIN,
+              BR-047/BR-053). */}
           <Route element={<RequireRole roles={["OPERATOR", "MANAGER", "ADMIN"]} />}>
             <Route path="/compras/nueva" element={<NewPurchaseOrderPage />} />
-          </Route>
-          <Route element={<RequireRole roles={["OPERATOR", "ADMIN"]} />}>
             <Route path="/ventas/nueva" element={<NewSalePage />} />
           </Route>
 

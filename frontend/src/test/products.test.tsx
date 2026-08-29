@@ -28,6 +28,20 @@ describe("Pantalla de productos", () => {
     expect(within(screen.getByText("SKU-002").closest("tr")!).getByText("Inactivo")).toBeInTheDocument();
   });
 
+  it("muestra el stock mínimo y el precio de venta de cada producto", async () => {
+    seedSession("OPERATOR");
+    mockFetch(productRoutes());
+    renderApp("/productos");
+
+    const row = (await screen.findByText("SKU-001")).closest("tr")!;
+    expect(within(row).getByText("10")).toBeInTheDocument();
+    expect(within(row).getByText("50")).toBeInTheDocument();
+
+    // SKU-002 no tiene precio configurado: se avisa en vez de mostrar vacío.
+    const rowWithoutPrice = screen.getByText("SKU-002").closest("tr")!;
+    expect(within(rowWithoutPrice).getByText(/sin precio/i)).toBeInTheDocument();
+  });
+
   it("muestra el estado vacío cuando no hay coincidencias", async () => {
     seedSession("OPERATOR");
     mockFetch(productRoutes((url) => (url.includes("/products?") ? jsonResponse(200, page([])) : undefined)));
@@ -101,6 +115,7 @@ describe("Pantalla de productos", () => {
       expect(screen.getByText(/el nombre es obligatorio/i)).toBeInTheDocument();
       expect(screen.getByText(/selecciona la unidad base/i)).toBeInTheDocument();
       expect(screen.getByText(/indica el stock mínimo/i)).toBeInTheDocument();
+      expect(screen.getByText(/indica el precio de venta/i)).toBeInTheDocument();
       expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
     });
 
@@ -127,6 +142,7 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Grava");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
       await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
+      await userEvent.type(within(dialog).getByLabelText(/precio de venta/i), "25");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       const post = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
@@ -136,6 +152,7 @@ describe("Pantalla de productos", () => {
         name: "Grava",
         baseUnitOfMeasureId: 1,
         minimumStock: 5,
+        unitPrice: 25,
       });
       // Revalidación tras la mutación: el nuevo producto aparece sin recargar.
       expect(await screen.findByText("SKU-003")).toBeInTheDocument();
@@ -158,6 +175,7 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Cemento");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
       await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
+      await userEvent.type(within(dialog).getByLabelText(/precio de venta/i), "25");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       expect(await screen.findByText(/ya existe un producto con el sku sku-001/i)).toBeInTheDocument();
@@ -188,9 +206,54 @@ describe("Pantalla de productos", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Nombre larguísimo");
       await userEvent.selectOptions(within(dialog).getByLabelText(/unidad base/i), UNITS[0].id);
       await userEvent.type(within(dialog).getByLabelText(/stock mínimo/i), "5");
+      await userEvent.type(within(dialog).getByLabelText(/precio de venta/i), "25");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
       expect(await screen.findByText(/no debe exceder 150 caracteres/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("Edición de unidades de medida (BR-050)", () => {
+    it("ADMIN puede editar el nombre de una unidad, el código permanece fijo", async () => {
+      seedSession("ADMIN");
+      let edited = false;
+      const fetchSpy = mockFetch(
+        productRoutes((url, init) => {
+          if (/\/units-of-measure\/1$/.test(url) && init?.method === "PATCH") {
+            edited = true;
+            return jsonResponse(200, { id: "1", code: "UND", name: "Unidad renombrada" });
+          }
+          if (url.includes("/units-of-measure") && edited) {
+            return jsonResponse(200, [{ id: "1", code: "UND", name: "Unidad renombrada" }, UNITS[1]]);
+          }
+          return undefined;
+        }),
+      );
+      renderApp("/productos/unidades");
+
+      const row = (await screen.findByText("UND")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /editar/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText(/código und/i)).toBeInTheDocument();
+
+      const nameField = within(dialog).getByLabelText(/^nombre$/i);
+      await userEvent.clear(nameField);
+      await userEvent.type(nameField, "Unidad renombrada");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      const patch = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+      expect(patch).toBeDefined();
+      expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({ name: "Unidad renombrada" });
+      expect(await screen.findByText("Unidad renombrada")).toBeInTheDocument();
+    });
+
+    it("un rol sin permiso no ve el botón editar en unidades de medida", async () => {
+      seedSession("OPERATOR");
+      mockFetch(productRoutes());
+      renderApp("/productos/unidades");
+
+      expect(await screen.findByText("UND")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /editar/i })).not.toBeInTheDocument();
     });
   });
 

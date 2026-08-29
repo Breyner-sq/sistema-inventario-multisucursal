@@ -27,8 +27,8 @@ export const UNITS: UnitOfMeasure[] = [
 ];
 
 export const PRODUCTS: Product[] = [
-  { id: "10", sku: "SKU-001", name: "Cemento gris", description: "Saco de 50 kg", baseUnitOfMeasureId: "1", active: true, minimumStock: 10 },
-  { id: "11", sku: "SKU-002", name: "Arena fina", description: null, baseUnitOfMeasureId: "1", active: false, minimumStock: 0 },
+  { id: "10", sku: "SKU-001", name: "Cemento gris", description: "Saco de 50 kg", baseUnitOfMeasureId: "1", active: true, minimumStock: 10, salePrice: 50 },
+  { id: "11", sku: "SKU-002", name: "Arena fina", description: null, baseUnitOfMeasureId: "1", active: false, minimumStock: 0, salePrice: null },
 ];
 
 export const PRODUCT_UNITS: ProductUnit[] = [
@@ -73,6 +73,7 @@ export function movement(overrides: Partial<InventoryMovement> = {}): InventoryM
 
 export const SUPPLIERS: Supplier[] = [
   { id: "1", name: "Distribuidora Andina", taxId: "TAX-001", contactName: "Ana Ríos", phone: null, email: null, active: true },
+  { id: "2", name: "Proveedor Norte", taxId: "TAX-002", contactName: null, phone: null, email: null, active: true },
 ];
 
 export const PRICE_LISTS: PriceList[] = [
@@ -116,10 +117,11 @@ export function sale(overrides: Partial<Sale> = {}): Sale {
     saleNumber: "V-ABC12345",
     branchId: "1",
     soldByUserId: "1",
+    soldByUserName: "Operador Centro",
     status: "CONFIRMED",
     saleDate: "2026-08-27T10:00:00Z",
     items: [
-      { productId: "10", quantity: 3, unitOfMeasureId: "1", unitPrice: 50, discountPercentage: 0, lineTotal: 150 },
+      { id: "9000", productId: "10", quantity: 3, unitOfMeasureId: "1", unitPrice: 50, discountPercentage: 0, lineTotal: 150, quantityReturned: 0, pending: 3 },
     ],
     subtotal: 150,
     discountTotal: 0,

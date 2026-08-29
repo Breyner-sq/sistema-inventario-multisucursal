@@ -4,6 +4,7 @@
 /app/src/main/java/com/inventario/multisucursal/auth/AuthController.java
 /app/src/main/java/com/inventario/multisucursal/auth/AuthenticatedUser.java
 /app/src/main/java/com/inventario/multisucursal/auth/AuthorizationService.java
+/app/src/main/java/com/inventario/multisucursal/auth/DisabledAccountException.java
 /app/src/main/java/com/inventario/multisucursal/auth/InvalidCredentialsException.java
 /app/src/main/java/com/inventario/multisucursal/auth/JpaAuditingConfig.java
 /app/src/main/java/com/inventario/multisucursal/auth/JwtAuthenticationFilter.java
@@ -107,6 +108,7 @@
 /app/src/main/java/com/inventario/multisucursal/products/UnitOfMeasureService.java
 /app/src/main/java/com/inventario/multisucursal/products/UpdateProductRequest.java
 /app/src/main/java/com/inventario/multisucursal/products/UpdateProductUnitConversionRequest.java
+/app/src/main/java/com/inventario/multisucursal/products/UpdateUnitOfMeasureRequest.java
 /app/src/main/java/com/inventario/multisucursal/purchases/CreatePurchaseOrderItemRequest.java
 /app/src/main/java/com/inventario/multisucursal/purchases/CreatePurchaseOrderRequest.java
 /app/src/main/java/com/inventario/multisucursal/purchases/PurchaseOrder.java
@@ -135,6 +137,10 @@
 /app/src/main/java/com/inventario/multisucursal/sales/SaleItemResponse.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleRepository.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleResponse.java
+/app/src/main/java/com/inventario/multisucursal/sales/SaleReturnItemRequest.java
+/app/src/main/java/com/inventario/multisucursal/sales/SaleReturnRequest.java
+/app/src/main/java/com/inventario/multisucursal/sales/SaleReturnResponse.java
+/app/src/main/java/com/inventario/multisucursal/sales/SaleReturnService.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleService.java
 /app/src/main/java/com/inventario/multisucursal/sales/SaleStatus.java
 /app/src/main/java/com/inventario/multisucursal/sales/SalesAggregate.java

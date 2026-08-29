@@ -31,6 +31,7 @@ export function ProductFormDialog({
   const [description, setDescription] = useState(product?.description ?? "");
   const [baseUnitId, setBaseUnitId] = useState(product?.baseUnitOfMeasureId ?? "");
   const [minimumStock, setMinimumStock] = useState(product ? String(product.minimumStock) : "");
+  const [unitPrice, setUnitPrice] = useState(product?.salePrice != null ? String(product.salePrice) : "");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const mutation = useMutation({
@@ -43,6 +44,7 @@ export function ProductFormDialog({
             description: description.trim() || null,
             baseUnitOfMeasureId: Number(baseUnitId),
             minimumStock: Number(minimumStock),
+            unitPrice: Number(unitPrice),
           }),
     onSuccess: () => {
       // Revalidar después de mutar: la lista vuelve a consultarse contra la
@@ -65,6 +67,9 @@ export function ProductFormDialog({
     if (!isEdit && !baseUnitId) errors.baseUnitOfMeasureId = "Selecciona la unidad base.";
     if (!isEdit && (!minimumStock.trim() || Number(minimumStock) < 0)) {
       errors.minimumStock = "Indica el stock mínimo (0 o mayor).";
+    }
+    if (!isEdit && (!unitPrice.trim() || Number(unitPrice) <= 0)) {
+      errors.unitPrice = "Indica el precio de venta (mayor que 0).";
     }
     setLocalErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -138,6 +143,19 @@ export function ProductFormDialog({
             <p className="state__hint">
               Umbral que usarán el estado de reabastecimiento y las alertas de stock en cada sucursal que reciba este
               producto por primera vez.
+            </p>
+
+            <Field
+              id="product-unit-price"
+              label="Precio de venta"
+              inputMode="decimal"
+              value={unitPrice}
+              onChange={(event) => setUnitPrice(event.target.value)}
+              error={errorFor("unitPrice")}
+            />
+            <p className="state__hint">
+              Precio con el que este producto queda disponible de inmediato para nuevas ventas, sin configurar
+              ninguna lista de precios aparte.
             </p>
           </>
         ) : null}

@@ -20,15 +20,23 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 
-/** docs/API_DESIGN.md, sección 7.8. Lectura acotada a la propia sucursal salvo ADMIN (sección 6, igual que purchase-orders). */
+/**
+ * docs/API_DESIGN.md, sección 7.8. Lectura acotada a la propia sucursal
+ * salvo ADMIN (sección 6, igual que purchase-orders). Escritura —crear y
+ * devolver— abierta a OPERATOR/MANAGER/ADMIN (BR-053: ampliación explícita
+ * sobre el "OPERATOR + ADMIN" original de esta sección, mismo criterio ya
+ * aplicado a `purchases`/`transfers` en BR-047).
+ */
 @RestController
 @RequestMapping("/api/v1/sales")
 public class SaleController {
 
     private final SaleService saleService;
+    private final SaleReturnService saleReturnService;
 
-    public SaleController(SaleService saleService) {
+    public SaleController(SaleService saleService, SaleReturnService saleReturnService) {
         this.saleService = saleService;
+        this.saleReturnService = saleReturnService;
     }
 
     @GetMapping
@@ -48,11 +56,21 @@ public class SaleController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('OPERATOR', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
     public SaleResponse create(
             @Valid @RequestBody CreateSaleRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @AuthenticationPrincipal AuthenticatedUser principal) {
         return saleService.confirmSale(request, principal.userId(), idempotencyKey);
+    }
+
+    @PostMapping("/{id}/returns")
+    @PreAuthorize("hasAnyRole('OPERATOR', 'MANAGER', 'ADMIN')")
+    public SaleReturnResponse createReturn(
+            @PathVariable Long id,
+            @Valid @RequestBody SaleReturnRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @AuthenticationPrincipal AuthenticatedUser principal) {
+        return saleReturnService.createReturn(id, request, idempotencyKey, principal.userId());
     }
 }

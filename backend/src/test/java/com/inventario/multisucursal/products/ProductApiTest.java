@@ -111,7 +111,7 @@ class ProductApiTest {
     void operatorCanCreateProductAndBaseUnitIsAutoCreated() {
         ResponseEntity<ProductResponse> response = post(
                 "/api/v1/products",
-                new CreateProductRequest("SKU-001", "Producto 1", "Descripción", unUnit.getId(), BigDecimal.TEN),
+                new CreateProductRequest("SKU-001", "Producto 1", "Descripción", unUnit.getId(), BigDecimal.TEN, new BigDecimal("99.9900")),
                 operatorToken,
                 ProductResponse.class);
 
@@ -119,6 +119,7 @@ class ProductApiTest {
         assertThat(response.getBody().sku()).isEqualTo("SKU-001");
         assertThat(response.getBody().active()).isTrue();
         assertThat(response.getBody().minimumStock()).isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(response.getBody().salePrice()).isEqualByComparingTo(new BigDecimal("99.9900"));
 
         ResponseEntity<ProductUnitResponse[]> units = getWithToken(
                 "/api/v1/products/" + response.getBody().id() + "/units", operatorToken, ProductUnitResponse[].class);
@@ -147,12 +148,62 @@ class ProductApiTest {
     void creatingProductWithNegativeMinimumStockReturns400() {
         ResponseEntity<String> response = post(
                 "/api/v1/products",
-                new CreateProductRequest("SKU-NEGMIN", "Mínimo negativo", null, unUnit.getId(), new BigDecimal("-1")),
+                new CreateProductRequest("SKU-NEGMIN", "Mínimo negativo", null, unUnit.getId(), new BigDecimal("-1"), BigDecimal.TEN),
                 operatorToken,
                 String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+    }
+
+    // ---- Precio de venta (BR-051: precio inicial obligatorio) ----
+
+    @Test
+    void creatingProductWithoutUnitPriceReturns400() {
+        HttpHeaders headers = authHeaders(operatorToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String bodyWithoutUnitPrice = """
+                {"sku":"SKU-NOPRICE","name":"Sin precio","baseUnitOfMeasureId":%d,"minimumStock":0}""".formatted(unUnit.getId());
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/v1/products", HttpMethod.POST, new HttpEntity<>(bodyWithoutUnitPrice, headers), String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+    }
+
+    @Test
+    void creatingProductWithZeroOrNegativeUnitPriceReturns400() {
+        ResponseEntity<String> zero = post(
+                "/api/v1/products",
+                new CreateProductRequest("SKU-ZEROPRICE", "Precio cero", null, unUnit.getId(), BigDecimal.ZERO, BigDecimal.ZERO),
+                operatorToken,
+                String.class);
+        assertThat(zero.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(zero.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+
+        ResponseEntity<String> negative = post(
+                "/api/v1/products",
+                new CreateProductRequest("SKU-NEGPRICE", "Precio negativo", null, unUnit.getId(), BigDecimal.ZERO, new BigDecimal("-5")),
+                operatorToken,
+                String.class);
+        assertThat(negative.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(negative.getBody()).contains("\"code\":\"VALIDATION_ERROR\"");
+    }
+
+    @Test
+    void productsTableShowsTheSalePriceUsedAutomaticallyInANewSale() {
+        String productId = createProduct("SKU-AUTOPRICE", "Producto con precio", unUnit.getId(), new BigDecimal("42.5000"));
+
+        ResponseEntity<ProductResponse> detail = getWithToken("/api/v1/products/" + productId, operatorToken, ProductResponse.class);
+        assertThat(detail.getBody().salePrice()).isEqualByComparingTo(new BigDecimal("42.5000"));
+
+        // BR-030: sin priceListId explícito, la venta resuelve la lista
+        // global por defecto — la misma en la que ProductService.create fijó
+        // el precio — así que el precio de venta ya está disponible sin
+        // ninguna configuración manual de listas de precios.
+        ResponseEntity<String> priceLists = getWithToken("/api/v1/price-lists?active=true", adminToken, String.class);
+        assertThat(priceLists.getBody()).contains("\"Lista General\"");
     }
 
     @Test
@@ -238,7 +289,7 @@ class ProductApiTest {
 
         ResponseEntity<String> response = post(
                 "/api/v1/products",
-                new CreateProductRequest("SKU-DUP", "Segundo", null, unUnit.getId(), BigDecimal.ZERO),
+                new CreateProductRequest("SKU-DUP", "Segundo", null, unUnit.getId(), BigDecimal.ZERO, BigDecimal.TEN),
                 operatorToken,
                 String.class);
 
@@ -252,7 +303,7 @@ class ProductApiTest {
     void creatingProductWithNonexistentUnitReturns404() {
         ResponseEntity<String> response = post(
                 "/api/v1/products",
-                new CreateProductRequest("SKU-005", "Producto 5", null, 999_999L, BigDecimal.ZERO),
+                new CreateProductRequest("SKU-005", "Producto 5", null, 999_999L, BigDecimal.ZERO, BigDecimal.TEN),
                 operatorToken,
                 String.class);
 
@@ -340,7 +391,7 @@ class ProductApiTest {
     void managerCannotCreateProduct() {
         ResponseEntity<String> response = post(
                 "/api/v1/products",
-                new CreateProductRequest("SKU-011", "Producto 11", null, unUnit.getId(), BigDecimal.ZERO),
+                new CreateProductRequest("SKU-011", "Producto 11", null, unUnit.getId(), BigDecimal.ZERO, BigDecimal.TEN),
                 managerToken,
                 String.class);
 
@@ -358,6 +409,35 @@ class ProductApiTest {
                 "/api/v1/units-of-measure", new CreateUnitOfMeasureRequest("KG2", "Kilogramo 2"), operatorToken, String.class);
         assertThat(operatorResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(operatorResponse.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+    }
+
+    // ---- Edición de unidades de medida (BR-050) ----
+
+    @Test
+    void adminCanEditUnitOfMeasureNameButCodeStaysFixed() {
+        ResponseEntity<UnitOfMeasureResponse> response = patch(
+                "/api/v1/units-of-measure/" + unUnit.getId(),
+                new UpdateUnitOfMeasureRequest("Unidad renombrada"),
+                adminToken,
+                UnitOfMeasureResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().name()).isEqualTo("Unidad renombrada");
+        assertThat(response.getBody().code()).isEqualTo("UN");
+    }
+
+    @Test
+    void operatorAndManagerCannotEditUnitOfMeasure() {
+        assertThat(patch("/api/v1/units-of-measure/" + unUnit.getId(), new UpdateUnitOfMeasureRequest("X"), operatorToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(patch("/api/v1/units-of-measure/" + unUnit.getId(), new UpdateUnitOfMeasureRequest("X"), managerToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void editingNonexistentUnitOfMeasureReturns404() {
+        assertThat(patch("/api/v1/units-of-measure/999999", new UpdateUnitOfMeasureRequest("X"), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     // ---- Producto inactivo ----
@@ -413,14 +493,18 @@ class ProductApiTest {
     // ---- helpers ----
 
     private String createProduct(String sku, String name, Long baseUnitId) {
+        return createProduct(sku, name, baseUnitId, BigDecimal.TEN);
+    }
+
+    private String createProduct(String sku, String name, Long baseUnitId, BigDecimal unitPrice) {
         ResponseEntity<ProductResponse> response = post(
-                "/api/v1/products", new CreateProductRequest(sku, name, null, baseUnitId, BigDecimal.ZERO), operatorToken, ProductResponse.class);
+                "/api/v1/products", new CreateProductRequest(sku, name, null, baseUnitId, BigDecimal.ZERO, unitPrice), operatorToken, ProductResponse.class);
         return response.getBody().id();
     }
 
     private String createProductWithMinimumStock(String sku, BigDecimal minimumStock) {
         ResponseEntity<ProductResponse> response = post(
-                "/api/v1/products", new CreateProductRequest(sku, "Producto " + sku, null, unUnit.getId(), minimumStock),
+                "/api/v1/products", new CreateProductRequest(sku, "Producto " + sku, null, unUnit.getId(), minimumStock, BigDecimal.TEN),
                 operatorToken, ProductResponse.class);
         return response.getBody().id();
     }

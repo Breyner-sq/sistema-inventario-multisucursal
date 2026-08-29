@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.purchases.PurchaseReceiptApiTest
 -------------------------------------------------------------------------------
-Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.791 s -- in com.inventario.multisucursal.purchases.PurchaseReceiptApiTest
+Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.605 s -- in com.inventario.multisucursal.purchases.PurchaseReceiptApiTest

@@ -1,4 +1,0 @@
-Carpeta reservada para migraciones Flyway versionadas (V1__..., V2__...).
-Intencionalmente vacia en este esqueleto: no se implementan aun las tablas de
-Product, Inventory, Sales, Purchases ni Transfers (ver docs/DOMAIN_MODEL.md
-y la condicion de parada de esta fase).

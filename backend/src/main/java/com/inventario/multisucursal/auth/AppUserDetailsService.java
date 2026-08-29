@@ -21,8 +21,11 @@ public class AppUserDetailsService implements UserDetailsService {
                 .map(AppUserDetails::new)
                 // Mensaje genérico: no confirmar si el email existe o no (evita
                 // enumeración de usuarios). El código HTTP real lo decide
-                // AuthController al traducir cualquier AuthenticationException
-                // a InvalidCredentialsException (401 CREDENCIALES_INVALIDAS).
+                // AuthController al traducir la AuthenticationException resultante
+                // a InvalidCredentialsException (401 CREDENCIALES_INVALIDAS) — salvo
+                // que la cuenta exista pero esté desactivada (isEnabled() = false),
+                // caso que AuthController distingue como DisabledAccountException
+                // (401 CUENTA_DESACTIVADA, BR-055).
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
     }
 }

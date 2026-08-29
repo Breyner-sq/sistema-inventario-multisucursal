@@ -9,13 +9,16 @@ import { useAuth } from "../../auth/useAuth";
 import { Field, FormErrorMessage } from "../../components/form/Field";
 import { toFormErrors } from "../../components/form/formErrors";
 import { AsyncBoundary } from "../../components/state/states";
+import type { UnitOfMeasure } from "../../types/api";
+import { UnitOfMeasureFormDialog } from "./UnitOfMeasureFormDialog";
 import { useUnitsOfMeasure } from "./useCatalog";
 
 /**
  * Catálogo global de unidades de medida. La lectura es abierta a cualquier
- * usuario autenticado; el alta es exclusiva de ADMIN —más estricta que el
- * resto del módulo de productos— porque una unidad mal definida afecta a las
- * conversiones de todos los productos que la usen.
+ * usuario autenticado; el alta y la edición del nombre (BR-050) son
+ * exclusivas de ADMIN —más estricto que el resto del módulo de productos—
+ * porque una unidad mal definida afecta a las conversiones de todos los
+ * productos que la usen. El código es la clave de negocio y no se edita.
  */
 export function UnitsOfMeasurePage() {
   const { user } = useAuth();
@@ -26,6 +29,7 @@ export function UnitsOfMeasurePage() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<UnitOfMeasure | undefined>();
 
   const mutation = useMutation({
     mutationFn: () => createUnitOfMeasure({ code: code.trim(), name: name.trim() }),
@@ -71,6 +75,7 @@ export function UnitsOfMeasurePage() {
               <tr>
                 <th scope="col">Código</th>
                 <th scope="col">Nombre</th>
+                {canCreate ? <th scope="col">Acciones</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -78,6 +83,13 @@ export function UnitsOfMeasurePage() {
                 <tr key={unit.id}>
                   <td>{unit.code}</td>
                   <td>{unit.name}</td>
+                  {canCreate ? (
+                    <td className="row__actions">
+                      <button type="button" onClick={() => setEditing(unit)}>
+                        Editar
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -112,6 +124,8 @@ export function UnitsOfMeasurePage() {
       ) : (
         <p className="state__hint">Solo un administrador puede dar de alta unidades de medida.</p>
       )}
+
+      {editing ? <UnitOfMeasureFormDialog unit={editing} onClose={() => setEditing(undefined)} /> : null}
     </section>
   );
 }

@@ -124,7 +124,7 @@ class PriceListApiTest {
 
     private String createProduct(String sku) {
         ResponseEntity<ProductResponse> response = post(
-                "/api/v1/products", Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0), operatorToken, ProductResponse.class);
+                "/api/v1/products", Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0, "unitPrice", 10), operatorToken, ProductResponse.class);
         return response.getBody().id();
     }
 

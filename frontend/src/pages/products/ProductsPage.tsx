@@ -114,6 +114,8 @@ export function ProductsPage() {
                   <th scope="col">SKU</th>
                   <th scope="col">Nombre</th>
                   <th scope="col">Unidad base</th>
+                  <th scope="col">Stock mínimo</th>
+                  <th scope="col">Precio de venta</th>
                   <th scope="col">Estado</th>
                   <th scope="col">Acciones</th>
                 </tr>
@@ -127,6 +129,8 @@ export function ProductsPage() {
                       {product.description ? <p className="state__hint">{product.description}</p> : null}
                     </td>
                     <td>{unitsById.get(product.baseUnitOfMeasureId)?.code ?? product.baseUnitOfMeasureId}</td>
+                    <td>{product.minimumStock}</td>
+                    <td>{product.salePrice != null ? product.salePrice : "Sin precio"}</td>
                     <td>
                       <span className={product.active ? "badge badge--ok" : "badge badge--muted"}>
                         {product.active ? "Activo" : "Inactivo"}

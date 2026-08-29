@@ -1,15 +1,29 @@
 package com.inventario.multisucursal.sales;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
 public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
 
     List<SaleItem> findBySaleId(Long saleId);
+
+    /** Bloqueo optimista con reintento sobre la línea (BR-052) — mismo patrón que {@code PurchaseOrderItemRepository.applyReceipt}. */
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE SaleItem i
+               SET i.quantityReturned = :newQuantityReturned, i.version = i.version + 1
+             WHERE i.id = :id AND i.version = :expectedVersion
+            """)
+    int applyReturn(
+            @Param("id") Long id,
+            @Param("expectedVersion") Long expectedVersion,
+            @Param("newQuantityReturned") BigDecimal newQuantityReturned);
 
     /**
      * Unidades vendidas por producto en una ventana de tiempo, para una sola

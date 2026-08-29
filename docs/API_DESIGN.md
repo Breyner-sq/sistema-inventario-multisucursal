@@ -34,7 +34,7 @@
 | Header | Uso |
 |---|---|
 | `Authorization: Bearer <jwt>` | Obligatorio en toda ruta salvo `POST /auth/login`. El JWT codifica `userId`, `role`, `branchId` (nulo si `ADMIN`) — `docs/adr/ADR-005-jwt-rbac.md`. |
-| `Idempotency-Key: <uuid>` | Obligatorio en las operaciones de **creación repetible** (categoría 2 de `docs/CRITICAL_FLOWS.md`, sección 1.1): `POST /sales`, `POST /purchase-orders`, `POST /purchase-orders/{id}/receipts`, `POST /inventory/adjustments`, `POST /transfers`, `POST /price-lists/{id}/prices`. El cliente genera el UUID una sola vez por acción de usuario y lo reenvía igual en cualquier reintento automático. Ausente el header en estos endpoints → `400`. No aplica a las transiciones de un solo uso (`approve`, `dispatch`, `receive`, etc.), que se protegen por el propio estado del recurso. |
+| `Idempotency-Key: <uuid>` | Obligatorio en las operaciones de **creación repetible** (categoría 2 de `docs/CRITICAL_FLOWS.md`, sección 1.1): `POST /sales`, `POST /sales/{id}/returns`, `POST /purchase-orders`, `POST /purchase-orders/{id}/receipts`, `POST /inventory/adjustments`, `POST /transfers`, `POST /price-lists/{id}/prices`. El cliente genera el UUID una sola vez por acción de usuario y lo reenvía igual en cualquier reintento automático. Ausente el header en estos endpoints → `400`. No aplica a las transiciones de un solo uso (`approve`, `dispatch`, `receive`, etc.), que se protegen por el propio estado del recurso. |
 | `Content-Type: application/json` | Obligatorio en toda solicitud con body. |
 | `X-Request-Id` | Opcional en la solicitud; si el cliente no lo envía, el servidor genera uno y lo devuelve en la respuesta (éxito o error) para correlación con logs (`docs/ARCHITECTURE.md`, sección 8). |
 
@@ -96,6 +96,7 @@ Ver `docs/CRITICAL_FLOWS.md`, sección 1.1, para el fundamento. Resumen aplicado
 | `POST /sales` | 2 — creación repetible | `Idempotency-Key` obligatorio |
 | `POST /purchase-orders` | 2 | `Idempotency-Key` obligatorio |
 | `POST /purchase-orders/{id}/receipts` | 2 | `Idempotency-Key` obligatorio |
+| `POST /sales/{id}/returns` | 2 | `Idempotency-Key` obligatorio — clave derivada por línea, `<Idempotency-Key>:<saleItemId>` (BR-052, igual patrón que la recepción de compra) |
 | `POST /inventory/adjustments` | 2 | `Idempotency-Key` obligatorio |
 | `POST /transfers` | 2 | `Idempotency-Key` obligatorio |
 | `POST /price-lists/{id}/prices` | 2 | `Idempotency-Key` obligatorio |
@@ -115,13 +116,13 @@ Convención de la tabla: **rol** con acceso; "propia sucursal" significa que el 
 | `auth/me` | cualquier rol autenticado | — |
 | `users`, `roles` | `ADMIN` | `ADMIN` |
 | `branches` | cualquier rol autenticado | `ADMIN` |
-| `products`, `units-of-measure` | cualquier rol autenticado | `OPERATOR` + `ADMIN` **[Supuesto: gestión de catálogo no asignada explícitamente en el documento fuente; se asigna a quien ejecuta operaciones de inventario]** |
+| `products`, `units-of-measure` | cualquier rol autenticado | `OPERATOR` + `ADMIN` **[Supuesto: gestión de catálogo no asignada explícitamente en el documento fuente; se asigna a quien ejecuta operaciones de inventario]** — excepción: crear o editar una unidad de medida (`POST`/`PATCH /units-of-measure`) es `ADMIN` únicamente (BR-050), más restrictivo que el resto de la fila |
 | `inventory`, `inventory-movements` | cualquier rol autenticado, cualquier sucursal (RF-003) | — (solo vía `adjustments` u otros flujos) |
 | `inventory/adjustments` | — | `OPERATOR` (propia sucursal) + `ADMIN` |
 | `stock-alerts` | cualquier rol autenticado | — (generación automática) |
-| `suppliers` | cualquier rol autenticado | `OPERATOR` + `ADMIN` |
+| `suppliers` | cualquier rol autenticado | cualquier rol autenticado — BR-049, sin restricción de rol ni de sucursal, incluida la eliminación real (`DELETE`) |
 | `purchase-orders`, `.../receipts` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` (cualquiera) | `OPERATOR`/`MANAGER` (propia sucursal) + `ADMIN` — `MANAGER` ampliado a las mismas capacidades que `ADMIN`/`OPERATOR` (crear, cancelar, recibir) por decisión explícita registrada en BR-047 |
-| `sales` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` | `OPERATOR` (propia sucursal) + `ADMIN` |
+| `sales` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` | `OPERATOR` + `MANAGER` (propia sucursal) + `ADMIN` — ampliado por BR-053, incluye crear y devolver (`/returns`) |
 | `sales/{id}/void` | — | `MANAGER` (propia sucursal) + `ADMIN` **[Supuesto: anulación requiere un rol de supervisión, no el mismo Operador que la creó — condicionado a que `docs/DOMAIN_MODEL.md` decisión 9 apruebe el estado `VOIDED`]** |
 | `price-lists`, `prices` | cualquier rol autenticado | `ADMIN` **[Supuesto: fijación de precios es administrativa]** |
 | `transfers` (lectura) | cualquier rol de las sucursales origen/destino, `ADMIN` cualquiera | — |
@@ -175,7 +176,7 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/products` | Lista. Filtros: `search` (sku/nombre), `active`. |
-| `POST` | `/products` | Crea producto (incluye `baseUnitOfMeasureId`). |
+| `POST` | `/products` | Crea producto (incluye `baseUnitOfMeasureId`, `minimumStock` y `unitPrice` — BR-048, BR-051). |
 | `GET` | `/products/{id}` | Detalle. |
 | `PATCH` | `/products/{id}` | Actualiza nombre/descripción. |
 | `POST` | `/products/{id}/activate` \| `/deactivate` | Baja/alta lógica. |
@@ -184,6 +185,7 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | `PATCH` | `/products/{id}/units/{unitOfMeasureId}` | Ajusta el factor de conversión. |
 | `GET` | `/units-of-measure` | Catálogo global de unidades. |
 | `POST` | `/units-of-measure` | Crea una unidad de medida (`ADMIN`). |
+| `PATCH` | `/units-of-measure/{id}` | Edita el nombre (`ADMIN`; BR-050). `code` es la clave de negocio y no se acepta en este cuerpo. |
 
 ### 7.5 Inventory / Movements / Alerts
 
@@ -204,6 +206,7 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | `GET` | `/suppliers/{id}` | Detalle. |
 | `PATCH` | `/suppliers/{id}` | Actualiza datos. |
 | `POST` | `/suppliers/{id}/activate` \| `/deactivate` | Baja/alta lógica. |
+| `DELETE` | `/suppliers/{id}` | Eliminación real (BR-049); rechaza con 409 si tiene órdenes de compra asociadas. |
 
 ### 7.7 Purchases
 
@@ -221,8 +224,9 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 |---|---|---|
 | `GET` | `/sales` | Lista. Filtros: `branchId`, `dateFrom`, `dateTo`, `status`. |
 | `POST` | `/sales` | Registra y confirma una venta atómicamente (flujo A). `Idempotency-Key` obligatorio. |
-| `GET` | `/sales/{id}` | Detalle con líneas y comprobante (RF-021). |
+| `GET` | `/sales/{id}` | Detalle con líneas y comprobante (RF-021), incluido `quantityReturned`/`pending` por línea (BR-052). |
 | `POST` | `/sales/{id}/void` | Anula una venta confirmada — **condicionado a la aprobación pendiente del estado `VOIDED`** (`docs/DOMAIN_MODEL.md`, decisión 9); no disponible hasta esa aprobación. |
+| `POST` | `/sales/{id}/returns` | Devolución total o parcial, una o varias líneas (BR-052): repone inventario al costo promedio vigente, no recalcula `Sale.total` ni cambia `Sale.status`. `Idempotency-Key` obligatorio. |
 | `GET` | `/price-lists` | Lista. Filtro: `branchId`, `active`. |
 | `POST` | `/price-lists` | Crea lista de precios. |
 | `GET` | `/price-lists/{id}/prices` | Precios vigentes; `includeHistory=true` incluye versiones cerradas (BR-004/decisión 3.4). |
@@ -267,13 +271,13 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 
 Los campos siguientes son la forma de respuesta pública — **no** corresponden 1:1 a las columnas de `docs/DOMAIN_MODEL.md** (p. ej. un `InventoryMovement` nunca expone sus tres FKs documentales sueltas; se agrupan en un objeto `source`).
 
-**`ProductDTO`**: `id`, `sku`, `name`, `description`, `baseUnitOfMeasureId`, `active`.
+**`ProductDTO`**: `id`, `sku`, `name`, `description`, `baseUnitOfMeasureId`, `active`, `minimumStock` (BR-048), `salePrice` (BR-051 — precio vigente resuelto de la lista de precios global por defecto, `null` si no tiene ninguno).
 
 **`InventoryDTO`**: `id`, `productId`, `branchId`, `quantityOnHand`, `averageUnitCost`, `minimumStock`, `updatedAt`.
 
 **`InventoryMovementDTO`**: `id`, `productId`, `branchId`, `direction`, `reason`, `quantity`, `unitOfMeasureId`, `responsibleUserId`, `occurredAt`, `notes`, `source` (objeto: `{ "type": "PURCHASE_ORDER" | "SALE" | "TRANSFER" | null, "id": "..." }`, nunca las tres FKs sueltas).
 
-**`SaleDTO`**: `id`, `saleNumber`, `branchId`, `soldByUserId`, `status`, `saleDate`, `items[]` (`productId`, `quantity`, `unitOfMeasureId`, `unitPrice`, `discountPercentage`, `lineTotal`), `subtotal`, `discountTotal`, `total`.
+**`SaleDTO`**: `id`, `saleNumber`, `branchId`, `soldByUserId`, `soldByUserName` (BR-054, resuelto por el backend — `GET /users` es ADMIN-only), `status`, `saleDate`, `items[]` (`id` — BR-052, necesario para devolver la línea —, `productId`, `quantity`, `unitOfMeasureId`, `unitPrice`, `discountPercentage`, `lineTotal`, `quantityReturned`, `pending`), `subtotal`, `discountTotal`, `total`.
 
 **`PurchaseOrderDTO`**: `id`, `orderNumber`, `supplierId`, `branchId`, `status`, `orderDate`, `paymentTerm`, `items[]` (`id`, `productId`, `quantityOrdered`, `quantityReceived`, `unitPrice`, `discountPercentage`).
 

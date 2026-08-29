@@ -25,6 +25,7 @@ describe("Listado de ventas", () => {
 
     const row = (await screen.findByText("V-ABC12345")).closest("tr")!;
     expect(within(row).getByText("Sucursal Centro")).toBeInTheDocument();
+    expect(within(row).getByText("Operador Centro")).toBeInTheDocument();
     expect(within(row).getByText("150")).toBeInTheDocument();
   });
 
@@ -45,17 +46,18 @@ describe("Listado de ventas", () => {
       expect(await screen.findByRole("button", { name: /nueva venta/i })).toBeInTheDocument();
     });
 
-    it("MANAGER no ve 'Nueva venta' y forzar la URL lo envía a sin permiso", async () => {
+    it("MANAGER ve 'Nueva venta' y puede acceder al formulario de alta", async () => {
+      // BR-053: ampliación explícita — MANAGER puede generar y gestionar ventas.
       seedSession("MANAGER");
       mockFetch(saleRoutes());
       const { unmount } = renderApp("/ventas");
 
       expect(await screen.findByText("V-ABC12345")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /nueva venta/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /nueva venta/i })).toBeInTheDocument();
       unmount();
 
       renderApp("/ventas/nueva");
-      expect(await screen.findByText(/sin permiso/i)).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: /nueva venta/i })).toBeInTheDocument();
     });
   });
 });
@@ -213,14 +215,100 @@ describe("Nueva venta", () => {
 });
 
 describe("Comprobante de venta", () => {
-  it("muestra líneas y totales", async () => {
+  it("muestra líneas, totales y el responsable de la venta", async () => {
     seedSession("OPERATOR");
     mockFetch(saleRoutes());
     renderApp("/ventas/700");
 
     expect(await screen.findByText("V-ABC12345")).toBeInTheDocument();
+    expect(screen.getByText("Operador Centro")).toBeInTheDocument();
     const row = screen.getByText(/SKU-001 — Cemento gris/).closest("tr")!;
-    expect(within(row).getByText("3")).toBeInTheDocument();
-    expect(within(row).getByText("150")).toBeInTheDocument();
+    const cells = within(row).getAllByRole("cell");
+    expect(cells[1]).toHaveTextContent("3"); // cantidad
+    expect(cells[5]).toHaveTextContent("150"); // total línea
+    expect(cells[6]).toHaveTextContent("0"); // devuelto
+    expect(cells[7]).toHaveTextContent("3"); // pendiente
+  });
+
+  describe("Devolución de venta (BR-052)", () => {
+    it("un rol autorizado registra una devolución con Idempotency-Key y el inventario se refresca", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(
+        saleRoutes((url, init) => {
+          if (url.includes("/returns") && init?.method === "POST") {
+            return jsonResponse(200, {
+              saleId: "700",
+              items: [{ saleItemId: "9000", quantity: 2, quantityReturned: 2, pending: 1 }],
+              inventoryUpdates: [{ productId: "10", branchId: "1", quantityOnHand: 12 }],
+            });
+          }
+          return undefined;
+        }),
+      );
+      renderApp("/ventas/700");
+
+      await userEvent.click(await screen.findByRole("button", { name: /generar devolución/i }));
+      const formDialog = await screen.findByRole("dialog", { name: /^generar devolución$/i });
+      await userEvent.type(within(formDialog).getByLabelText(/cantidad a devolver de sku-001/i), "2");
+      await userEvent.click(within(formDialog).getByRole("button", { name: /continuar/i }));
+
+      const dialog = await screen.findByRole("dialog", { name: /confirmar devolución/i });
+      await userEvent.click(within(dialog).getByRole("button", { name: /registrar devolución/i }));
+
+      const post = await waitFor(() => {
+        const call = fetchSpy.mock.calls.find(([url, init]) => String(url).includes("/returns") && (init as RequestInit)?.method === "POST");
+        expect(call).toBeDefined();
+        return call!;
+      });
+      const [, init] = post;
+      expect((init as RequestInit).headers).toMatchObject({ "Idempotency-Key": expect.any(String) });
+      expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ items: [{ saleItemId: 9000, quantity: 2 }] });
+    });
+
+    it("el formulario de devolución no se muestra hasta hacer clic en 'Generar devolución'", async () => {
+      seedSession("OPERATOR");
+      mockFetch(saleRoutes());
+      renderApp("/ventas/700");
+
+      await screen.findByText("V-ABC12345");
+      expect(screen.queryByLabelText(/cantidad a devolver/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /generar devolución/i }));
+      expect(await screen.findByRole("dialog", { name: /^generar devolución$/i })).toBeInTheDocument();
+    });
+
+    it("exige al menos una cantidad antes de continuar", async () => {
+      seedSession("OPERATOR");
+      mockFetch(saleRoutes());
+      renderApp("/ventas/700");
+
+      await userEvent.click(await screen.findByRole("button", { name: /generar devolución/i }));
+      const dialog = await screen.findByRole("dialog", { name: /^generar devolución$/i });
+      await userEvent.click(within(dialog).getByRole("button", { name: /continuar/i }));
+      expect(await screen.findByText(/ingresa la cantidad a devolver/i)).toBeInTheDocument();
+    });
+
+    it("cancelar el formulario lo cierra sin enviar nada", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(saleRoutes());
+      renderApp("/ventas/700");
+
+      await userEvent.click(await screen.findByRole("button", { name: /generar devolución/i }));
+      const dialog = await screen.findByRole("dialog", { name: /^generar devolución$/i });
+      await userEvent.type(within(dialog).getByLabelText(/cantidad a devolver de sku-001/i), "1");
+      await userEvent.click(within(dialog).getByRole("button", { name: /cancelar/i }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("/returns"))).toBe(false);
+    });
+
+    it("MANAGER también puede generar una devolución (BR-053: mismas capacidades que OPERATOR/ADMIN)", async () => {
+      seedSession("MANAGER");
+      mockFetch(saleRoutes());
+      renderApp("/ventas/700");
+
+      expect(await screen.findByRole("button", { name: /generar devolución/i })).toBeInTheDocument();
+    });
   });
 });

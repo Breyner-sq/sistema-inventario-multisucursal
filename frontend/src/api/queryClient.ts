@@ -79,6 +79,7 @@ export const queryKeys = {
 export const queryPrefixes = {
   branches: ["branches"] as const,
   users: ["users"] as const,
+  suppliers: ["suppliers"] as const,
   products: ["products"] as const,
   inventory: ["inventory"] as const,
   inventoryMovements: ["inventory-movements"] as const,

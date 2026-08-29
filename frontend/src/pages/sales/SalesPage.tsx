@@ -79,6 +79,7 @@ export function SalesPage() {
                   <th scope="col">Venta</th>
                   <th scope="col">Sucursal</th>
                   <th scope="col">Fecha</th>
+                  <th scope="col">Responsable</th>
                   <th scope="col">Total</th>
                   <th scope="col">Acciones</th>
                 </tr>
@@ -89,6 +90,7 @@ export function SalesPage() {
                     <td>{sale.saleNumber}</td>
                     <td>{branchesById.get(sale.branchId)?.name ?? sale.branchId}</td>
                     <td>{new Date(sale.saleDate).toLocaleString()}</td>
+                    <td>{sale.soldByUserName ?? sale.soldByUserId}</td>
                     <td>{sale.total}</td>
                     <td>
                       <Link to={`/ventas/${sale.id}`}>Ver comprobante</Link>

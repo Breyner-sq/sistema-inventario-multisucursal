@@ -12,9 +12,14 @@ import java.math.BigDecimal;
 
 /**
  * Línea de venta (docs/DOMAIN_MODEL.md, sección 2.16; RF-017, RF-020).
- * Inmutable una vez creada — {@code unitPrice} es el precio efectivamente
+ * {@code unitPrice}/{@code discountPercentage}/{@code lineTotal} son
+ * inmutables una vez creada — {@code unitPrice} es el precio efectivamente
  * cobrado (copiado de {@code Price} vigente al confirmar), no cambia si el
- * precio de referencia cambia después (BR-021).
+ * precio de referencia cambia después (BR-021). {@code quantityReturned}
+ * (BR-052) es la única excepción: cantidad acumulada devuelta contra esta
+ * línea, con su propio {@code version} para bloqueo optimista (igual patrón
+ * que {@code PurchaseOrderItem.version}, necesario porque puede haber más de
+ * una devolución parcial sobre la misma línea).
  */
 @Entity
 @Table(name = "sale_item", uniqueConstraints = @UniqueConstraint(columnNames = {"sale_id", "product_id"}))
@@ -45,6 +50,12 @@ public class SaleItem {
     @Column(name = "line_total", nullable = false, precision = 19, scale = 4)
     private BigDecimal lineTotal;
 
+    @Column(name = "quantity_returned", nullable = false, precision = 19, scale = 6)
+    private BigDecimal quantityReturned;
+
+    @Column(nullable = false)
+    private Long version;
+
     protected SaleItem() {
         // JPA
     }
@@ -59,6 +70,13 @@ public class SaleItem {
         this.unitPrice = unitPrice;
         this.discountPercentage = discountPercentage;
         this.lineTotal = lineTotal;
+        this.quantityReturned = BigDecimal.ZERO;
+        this.version = 0L;
+    }
+
+    /** BR-052: cantidad de esta línea todavía disponible para devolver. */
+    public BigDecimal pending() {
+        return quantity.subtract(quantityReturned);
     }
 
     public Long getId() {
@@ -91,5 +109,13 @@ public class SaleItem {
 
     public BigDecimal getLineTotal() {
         return lineTotal;
+    }
+
+    public BigDecimal getQuantityReturned() {
+        return quantityReturned;
+    }
+
+    public Long getVersion() {
+        return version;
     }
 }

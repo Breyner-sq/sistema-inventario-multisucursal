@@ -28,10 +28,11 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Inventario", path: "/inventario" },
   { label: "Alertas", path: "/inventario/alertas" },
   { label: "Productos", path: "/productos" },
+  { label: "Proveedores", path: "/proveedores" },
   { label: "Compras", path: "/compras" },
   { label: "Ventas", path: "/ventas" },
   { label: "Transferencias", path: "/transferencias" },
-  { label: "Logística", path: "/logistica/rutas" },
+  { label: "Logística", path: "/logistica/cumplimiento" },
   { label: "Sucursales", path: "/sucursales" },
   { label: "Usuarios", path: "/usuarios", roles: ["ADMIN"] },
 ];
@@ -88,14 +89,25 @@ export const canBranches = {
   write: (role: Role | undefined): boolean => role === "ADMIN",
 };
 
+/**
+ * Proveedores: CRUD completo (incluida la eliminación) abierto a cualquier
+ * rol autenticado (BR-049) — a diferencia del resto de catálogos, no hay
+ * ningún subconjunto de roles con más capacidades que otro. Se mantiene esta
+ * función, en vez de omitir el chequeo en la pantalla, solo para seguir el
+ * mismo idioma que el resto de módulos (`canX.write`).
+ */
+export const canSuppliers = {
+  write: (_role: Role | undefined): boolean => true,
+};
+
 export const canPurchases = {
   /** Crear orden, cancelarla y registrar recepción — MANAGER incluido, mismas capacidades que ADMIN. */
   write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
 };
 
 export const canSales = {
-  /** Registrar una venta. */
-  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "ADMIN",
+  /** Registrar y gestionar (incluida la devolución de) una venta — MANAGER incluido, BR-053. */
+  write: (role: Role | undefined): boolean => role === "OPERATOR" || role === "MANAGER" || role === "ADMIN",
 };
 
 /**

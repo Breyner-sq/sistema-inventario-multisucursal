@@ -3,6 +3,7 @@ package com.inventario.multisucursal.auth;
 import com.inventario.multisucursal.users.User;
 import jakarta.validation.Valid;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -37,10 +38,16 @@ public class AuthController {
         try {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.email(), request.password()));
+        } catch (DisabledException ex) {
+            // BR-055: distinto por instrucción explícita del resto de fallos de
+            // login — ver DisabledAccountException para la nota de seguridad.
+            // DaoAuthenticationProvider comprueba isEnabled() antes que la
+            // contraseña, así que esto se dispara incluso con la contraseña
+            // incorrecta sobre una cuenta desactivada.
+            throw new DisabledAccountException();
         } catch (AuthenticationException ex) {
-            // BadCredentialsException (password incorrecta), UsernameNotFoundException
-            // (email inexistente) y DisabledException (cuenta inactiva) se tratan
-            // todas igual a propósito - ver InvalidCredentialsException.
+            // BadCredentialsException (password incorrecta) y UsernameNotFoundException
+            // (email inexistente) se tratan igual a propósito - ver InvalidCredentialsException.
             throw new InvalidCredentialsException();
         }
 

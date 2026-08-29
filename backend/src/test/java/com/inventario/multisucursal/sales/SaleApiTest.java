@@ -289,18 +289,18 @@ class SaleApiTest {
     }
 
     @Test
-    void managerCannotSell() {
+    void managerCanSell() {
+        // BR-053: ampliación explícita — MANAGER puede generar y gestionar ventas, igual que OPERATOR/ADMIN.
         String productId = createProduct("SKU-SALE-010");
         setPrice(productId, "15.00");
         stockUp(productId, branchA.getId(), 10);
 
-        ResponseEntity<String> response = sell(
+        ResponseEntity<SaleResponse> response = sell(
                 Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
                         "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 1))),
-                managerAToken, String.class);
+                managerAToken, SaleResponse.class);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(response.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
 
     @Test
@@ -417,12 +417,228 @@ class SaleApiTest {
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
+    // ---- Responsable de la venta (BR-054) ----
+
+    @Test
+    void saleExposesTheNameOfWhoGeneratedIt() {
+        String productId = createProduct("SKU-SALE-017");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+
+        ResponseEntity<SaleResponse> created = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 1))),
+                operatorAToken, SaleResponse.class);
+        assertThat(created.getBody().soldByUserName()).isEqualTo("Operador A");
+
+        ResponseEntity<SaleResponse> fetched = getWithToken("/api/v1/sales/" + created.getBody().id(), adminToken, SaleResponse.class);
+        assertThat(fetched.getBody().soldByUserName()).isEqualTo("Operador A");
+
+        ResponseEntity<String> list = getWithToken("/api/v1/sales?branchId=" + branchA.getId(), adminToken, String.class);
+        assertThat(list.getBody()).contains("\"soldByUserName\":\"Operador A\"");
+    }
+
+    // ---- Devolución de venta (BR-052) ----
+
+    @Test
+    void operatorCanReturnPartOfASoldItemAndStockIncreasesBack() {
+        String productId = createProduct("SKU-RET-001");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 5))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+        assertThat(stockOf(productId, branchA.getId())).isEqualByComparingTo(new BigDecimal("5"));
+
+        ResponseEntity<SaleReturnResponse> response = returnSale(
+                sale.getBody().id(),
+                Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 2))),
+                operatorAToken, SaleReturnResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().items()).hasSize(1);
+        assertThat(response.getBody().items().get(0).quantityReturned()).isEqualByComparingTo(new BigDecimal("2"));
+        assertThat(response.getBody().items().get(0).pending()).isEqualByComparingTo(new BigDecimal("3"));
+        assertThat(response.getBody().inventoryUpdates().get(0).quantityOnHand()).isEqualByComparingTo(new BigDecimal("7"));
+        assertThat(stockOf(productId, branchA.getId())).isEqualByComparingTo(new BigDecimal("7"));
+
+        ResponseEntity<SaleResponse> reread = getWithToken("/api/v1/sales/" + sale.getBody().id(), adminToken, SaleResponse.class);
+        assertThat(reread.getBody().items().get(0).quantityReturned()).isEqualByComparingTo(new BigDecimal("2"));
+        assertThat(reread.getBody().items().get(0).pending()).isEqualByComparingTo(new BigDecimal("3"));
+        // El comprobante original no se toca (BR-021): la devolución no recalcula subtotal/total ni el estado.
+        assertThat(reread.getBody().total()).isEqualByComparingTo(new BigDecimal("75.0000"));
+        assertThat(reread.getBody().status()).isEqualTo(SaleStatus.CONFIRMED);
+    }
+
+    @Test
+    void returningMoreThanSoldIsRejected() {
+        String productId = createProduct("SKU-RET-002");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        ResponseEntity<String> response = returnSale(
+                sale.getBody().id(),
+                Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 99))),
+                operatorAToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"CANTIDAD_DEVOLUCION_EXCEDE_VENDIDO\"");
+        assertThat(stockOf(productId, branchA.getId())).isEqualByComparingTo(new BigDecimal("7"));
+    }
+
+    @Test
+    void returningNonPositiveQuantityIsRejected() {
+        String productId = createProduct("SKU-RET-003");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        ResponseEntity<String> response = returnSale(
+                sale.getBody().id(),
+                Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 0))),
+                operatorAToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"CANTIDAD_INVALIDA\"");
+    }
+
+    @Test
+    void missingIdempotencyKeyOnReturnIsRejected() {
+        String productId = createProduct("SKU-RET-004");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/v1/sales/" + sale.getBody().id() + "/returns", HttpMethod.POST,
+                new HttpEntity<>(Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 1))), authHeaders(operatorAToken)),
+                String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("\"code\":\"IDEMPOTENCY_KEY_REQUERIDO\"");
+    }
+
+    @Test
+    void retryingSameReturnIdempotencyKeyDoesNotApplyItTwice() {
+        String productId = createProduct("SKU-RET-005");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 5))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+        Map<String, Object> body = Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 2)));
+        String idempotencyKey = UUID.randomUUID().toString();
+
+        ResponseEntity<SaleReturnResponse> first = returnSaleWithKey(sale.getBody().id(), body, idempotencyKey, operatorAToken);
+        ResponseEntity<SaleReturnResponse> retry = returnSaleWithKey(sale.getBody().id(), body, idempotencyKey, operatorAToken);
+
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(retry.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(retry.getBody().items().get(0).quantityReturned()).isEqualByComparingTo(new BigDecimal("2"));
+        assertThat(stockOf(productId, branchA.getId())).isEqualByComparingTo(new BigDecimal("7"));
+    }
+
+    @Test
+    void returnMovementIsLinkedToTheSaleItemWithReasonDevolucion() {
+        String productId = createProduct("SKU-RET-006");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 4))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        returnSale(sale.getBody().id(), Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 1))), operatorAToken, SaleReturnResponse.class);
+
+        ResponseEntity<String> movements = getWithToken(
+                "/api/v1/inventory-movements?branchId=" + branchA.getId() + "&productId=" + productId + "&reason=DEVOLUCION", adminToken, String.class);
+        assertThat(movements.getBody())
+                .contains("\"reason\":\"DEVOLUCION\"")
+                .contains("\"direction\":\"INGRESO\"")
+                .contains("\"type\":\"SALE\"")
+                .contains("\"id\":\"" + saleItemId + "\"");
+    }
+
+    @Test
+    void managerCanReturnASale() {
+        String productId = createProduct("SKU-RET-007");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        ResponseEntity<SaleReturnResponse> response = returnSale(
+                sale.getBody().id(),
+                Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 1))),
+                managerAToken, SaleReturnResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void operatorCannotReturnASaleFromAnotherBranch() {
+        String productId = createProduct("SKU-RET-008");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        ResponseEntity<String> response = returnSale(
+                sale.getBody().id(),
+                Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 1))),
+                operatorBToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).contains("\"code\":\"SUCURSAL_NO_AUTORIZADA\"");
+    }
+
+    @Test
+    void returningFromNonexistentSaleOrLineReturns404() {
+        String productId = createProduct("SKU-RET-009");
+        setPrice(productId, "15.00");
+        stockUp(productId, branchA.getId(), 10);
+        ResponseEntity<SaleResponse> sale = sell(
+                Map.of("branchId", branchA.getId(), "priceListId", Long.valueOf(priceListId),
+                        "items", List.of(Map.of("productId", Long.valueOf(productId), "quantity", 3))),
+                operatorAToken, SaleResponse.class);
+        String saleItemId = sale.getBody().items().get(0).id();
+
+        assertThat(returnSale(999_999L, Map.of("items", List.of(Map.of("saleItemId", Long.valueOf(saleItemId), "quantity", 1))), operatorAToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(returnSale(sale.getBody().id(), Map.of("items", List.of(Map.of("saleItemId", 999_999, "quantity", 1))), operatorAToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     // ---- helpers ----
 
     private String createProduct(String sku) {
         ResponseEntity<ProductResponse> response = restTemplate.exchange(
                 "/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0), authHeaders(operatorAToken)),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0, "unitPrice", 10), authHeaders(operatorAToken)),
                 ProductResponse.class);
         return response.getBody().id();
     }
@@ -461,6 +677,24 @@ class SaleApiTest {
         HttpHeaders headers = authHeaders(token);
         headers.set("Idempotency-Key", idempotencyKey);
         return restTemplate.exchange("/api/v1/sales", HttpMethod.POST, new HttpEntity<>(body, headers), responseType);
+    }
+
+    private <T> ResponseEntity<T> returnSale(String saleId, Object body, String token, Class<T> responseType) {
+        return returnSaleWithKey(saleId, body, UUID.randomUUID().toString(), token, responseType);
+    }
+
+    private <T> ResponseEntity<T> returnSale(Long saleId, Object body, String token, Class<T> responseType) {
+        return returnSale(String.valueOf(saleId), body, token, responseType);
+    }
+
+    private ResponseEntity<SaleReturnResponse> returnSaleWithKey(String saleId, Object body, String idempotencyKey, String token) {
+        return returnSaleWithKey(saleId, body, idempotencyKey, token, SaleReturnResponse.class);
+    }
+
+    private <T> ResponseEntity<T> returnSaleWithKey(String saleId, Object body, String idempotencyKey, String token, Class<T> responseType) {
+        HttpHeaders headers = authHeaders(token);
+        headers.set("Idempotency-Key", idempotencyKey);
+        return restTemplate.exchange("/api/v1/sales/" + saleId + "/returns", HttpMethod.POST, new HttpEntity<>(body, headers), responseType);
     }
 
     private String login(String email) {

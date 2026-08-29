@@ -632,7 +632,7 @@ class TransferApiTest {
 
     private String createProduct(String sku) {
         return restTemplate.exchange("/api/v1/products", HttpMethod.POST,
-                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0),
+                new HttpEntity<>(Map.of("sku", sku, "name", "Producto " + sku, "baseUnitOfMeasureId", unUnit.getId(), "minimumStock", 0, "unitPrice", 10),
                         authHeaders(originOperatorToken)),
                 ProductResponse.class).getBody().id();
     }

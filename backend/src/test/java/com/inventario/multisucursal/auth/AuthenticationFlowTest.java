@@ -138,11 +138,21 @@ class AuthenticationFlowTest {
     }
 
     @Test
-    void loginWithInactiveUserReturns401() throws Exception {
+    void loginWithInactiveUserReturnsDisabledAccountError() throws Exception {
+        // BR-055: distinto por instrucción explícita del resto de fallos de login.
         LoginResult result = login("inactive@test.local", SEED_PASSWORD);
 
         assertThat(result.status()).isEqualTo(401);
-        assertThat(result.rawBody()).contains("\"code\":\"CREDENCIALES_INVALIDAS\"");
+        assertThat(result.rawBody()).contains("\"code\":\"CUENTA_DESACTIVADA\"");
+    }
+
+    @Test
+    void loginWithInactiveUserAndWrongPasswordStillReturnsDisabledAccountError() throws Exception {
+        // DaoAuthenticationProvider comprueba isEnabled() antes que la contraseña.
+        LoginResult result = login("inactive@test.local", "wrong-password");
+
+        assertThat(result.status()).isEqualTo(401);
+        assertThat(result.rawBody()).contains("\"code\":\"CUENTA_DESACTIVADA\"");
     }
 
     // ---- Token ausente / expirado / manipulado ----

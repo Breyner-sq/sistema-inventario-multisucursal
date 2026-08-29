@@ -143,6 +143,32 @@ public class InventoryMovement {
     }
 
     /**
+     * Movimiento de devolución de venta (BR-052), con la FK documental hacia
+     * {@code SaleItem} y clave de idempotencia. Expuesto como método de
+     * fábrica y no como constructor adicional por la misma razón que
+     * {@link #forTransfer}: tendría exactamente la misma firma en tiempo de
+     * compilación que el constructor de recepción de compra (dos
+     * {@code Long}+{@code String} finales no se distinguen entre sí).
+     */
+    public static InventoryMovement forSaleReturn(
+            Long productId,
+            Long branchId,
+            MovementDirection direction,
+            MovementReason reason,
+            BigDecimal quantity,
+            Long unitOfMeasureId,
+            Long responsibleUserId,
+            String notes,
+            Long saleItemId,
+            String idempotencyKey) {
+        InventoryMovement movement = new InventoryMovement(
+                productId, branchId, direction, reason, quantity, unitOfMeasureId, responsibleUserId, notes);
+        movement.saleItemId = saleItemId;
+        movement.idempotencyKey = idempotencyKey;
+        return movement;
+    }
+
+    /**
      * Movimiento generado por una transferencia (flujos D/E/F): el
      * {@code RETIRO}/{@code TRANSFERENCIA_SALIDA} en la sucursal origen al
      * despachar, y el {@code INGRESO}/{@code TRANSFERENCIA_ENTRADA} en la

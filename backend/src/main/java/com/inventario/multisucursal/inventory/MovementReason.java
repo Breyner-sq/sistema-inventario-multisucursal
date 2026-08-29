@@ -1,16 +1,16 @@
 package com.inventario.multisucursal.inventory;
 
 /**
- * Catálogo completo de motivos (docs/DOMAIN_MODEL.md, sección 2.8). Esta
- * fase (ajuste manual) solo permite escribir con {@link #DEVOLUCION},
- * {@link #AJUSTE_INGRESO}, {@link #MERMA} o {@link #AJUSTE_RETIRO} —
- * {@link InventoryMovementService} lo valida explícitamente. Los demás
- * valores existen ya en el enum porque son parte del modelo de dominio
- * aprobado y del `CHECK` de la migración, pero ningún flujo de esta fase los
- * produce todavía: {@link #COMPRA} y {@link #VENTA}/{@link #TRANSFERENCIA_SALIDA}/
- * {@link #TRANSFERENCIA_ENTRADA} los generarán los módulos `purchases`,
- * `sales` y `transfers` cuando se implementen (condición de parada explícita
- * de esta fase).
+ * Catálogo completo de motivos (docs/DOMAIN_MODEL.md, sección 2.8). El
+ * ajuste manual ({@link InventoryMovementService}) solo permite escribir con
+ * {@link #DEVOLUCION}, {@link #AJUSTE_INGRESO}, {@link #MERMA} o
+ * {@link #AJUSTE_RETIRO}, validado explícitamente ahí. {@link #DEVOLUCION}
+ * también la produce ahora {@code sales.SaleReturnService} (BR-052) —
+ * enlazada a la línea de venta de origen vía {@code sale_item_id}, a
+ * diferencia del ajuste manual, que no tiene ningún documento de origen.
+ * {@link #COMPRA} la genera `purchases`, {@link #VENTA} y
+ * {@link #TRANSFERENCIA_SALIDA}/{@link #TRANSFERENCIA_ENTRADA} las generan
+ * `sales`/`transfers` respectivamente.
  */
 public enum MovementReason {
     COMPRA,

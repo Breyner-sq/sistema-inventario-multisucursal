@@ -40,6 +40,11 @@ export function createUnitOfMeasure(body: { code: string; name: string }): Promi
   return apiRequest<UnitOfMeasure>("/units-of-measure", { method: "POST", body });
 }
 
+/** Edición del nombre: ADMIN únicamente (BR-050). El código es la clave de negocio y no se edita por esta vía. */
+export function updateUnitOfMeasure(id: string, body: { name: string }): Promise<UnitOfMeasure> {
+  return apiRequest<UnitOfMeasure>(`/units-of-measure/${id}`, { method: "PATCH", body });
+}
+
 export function listProductUnits(productId: string): Promise<ProductUnit[]> {
   return apiRequest<ProductUnit[]>(`/products/${productId}/units`);
 }

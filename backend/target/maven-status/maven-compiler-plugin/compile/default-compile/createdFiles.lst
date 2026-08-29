@@ -24,6 +24,7 @@ com/inventario/multisucursal/products/UnitOfMeasure.class
 com/inventario/multisucursal/transfers/ReceiveTransferRequest.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse$ComplianceMetrics.class
 com/inventario/multisucursal/common/web/ApiErrorBody.class
+com/inventario/multisucursal/sales/SaleReturnService.class
 com/inventario/multisucursal/products/PriceRepository.class
 com/inventario/multisucursal/products/PriceResponse.class
 com/inventario/multisucursal/dashboard/SalesTrendResponse.class
@@ -43,6 +44,7 @@ com/inventario/multisucursal/inventory/InventoryAdjustmentRequest.class
 com/inventario/multisucursal/dashboard/ReplenishmentResponse$ReplenishmentEntry.class
 com/inventario/multisucursal/common/web/ApiErrorResponse.class
 com/inventario/multisucursal/purchases/PurchaseReceiptResponse$InventoryUpdate.class
+com/inventario/multisucursal/products/UpdateUnitOfMeasureRequest.class
 com/inventario/multisucursal/suppliers/SupplierRepository.class
 com/inventario/multisucursal/auth/SecurityConfig.class
 com/inventario/multisucursal/purchases/PurchaseOrderItemResponse.class
@@ -67,6 +69,7 @@ com/inventario/multisucursal/purchases/PurchaseOrder.class
 com/inventario/multisucursal/logistics/RouteController.class
 com/inventario/multisucursal/inventory/InventoryMovementRepository.class
 com/inventario/multisucursal/products/AddProductUnitRequest.class
+com/inventario/multisucursal/auth/DisabledAccountException.class
 com/inventario/multisucursal/purchases/PurchaseReceiptResponse$ReceivedItem.class
 com/inventario/multisucursal/sales/Sale.class
 com/inventario/multisucursal/auth/AuthController.class
@@ -90,6 +93,7 @@ com/inventario/multisucursal/inventory/InventoryResponse.class
 com/inventario/multisucursal/sales/SalesAggregate.class
 com/inventario/multisucursal/events/EventBroadcaster.class
 com/inventario/multisucursal/products/ProductController.class
+com/inventario/multisucursal/sales/SaleReturnItemRequest.class
 com/inventario/multisucursal/suppliers/SupplierResponse.class
 com/inventario/multisucursal/suppliers/SupplierController.class
 com/inventario/multisucursal/auth/AppUserDetails.class
@@ -101,6 +105,7 @@ com/inventario/multisucursal/inventory/StockAlert.class
 com/inventario/multisucursal/transfers/ApproveTransferRequest.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse$RouteCompliance.class
 com/inventario/multisucursal/products/SetPriceRequest.class
+com/inventario/multisucursal/sales/SaleReturnResponse.class
 com/inventario/multisucursal/auth/AuthenticatedUser.class
 com/inventario/multisucursal/dashboard/ReplenishmentResponse.class
 com/inventario/multisucursal/inventory/InventoryMovementService.class
@@ -130,6 +135,7 @@ com/inventario/multisucursal/products/UnitOfMeasureController.class
 com/inventario/multisucursal/transfers/TransferResponse.class
 com/inventario/multisucursal/dashboard/BranchComparisonResponse.class
 com/inventario/multisucursal/common/exception/ApiException.class
+com/inventario/multisucursal/sales/SaleReturnRequest.class
 com/inventario/multisucursal/products/PriceListService.class
 com/inventario/multisucursal/common/web/ApiErrorSupport.class
 com/inventario/multisucursal/branches/UpdateBranchRequest.class
@@ -178,12 +184,14 @@ com/inventario/multisucursal/branches/BranchController.class
 com/inventario/multisucursal/auth/LoginRequest.class
 com/inventario/multisucursal/dashboard/ActiveTransfersResponse.class
 com/inventario/multisucursal/sales/SaleResponse.class
+com/inventario/multisucursal/sales/SaleReturnResponse$ReturnedItem.class
 com/inventario/multisucursal/inventory/StockAlertController.class
 com/inventario/multisucursal/users/UpdateUserRequest.class
 com/inventario/multisucursal/purchases/PurchaseOrderController.class
 com/inventario/multisucursal/transfers/DiscrepancyTreatmentResponse.class
 com/inventario/multisucursal/dashboard/BranchComparisonResponse$BranchMetrics.class
 com/inventario/multisucursal/users/DeactivateUserRequest.class
+com/inventario/multisucursal/sales/SaleReturnResponse$InventoryUpdate.class
 com/inventario/multisucursal/common/exception/ResourceConflictException.class
 com/inventario/multisucursal/inventory/StockAlertRow.class
 com/inventario/multisucursal/logistics/RouteService.class

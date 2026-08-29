@@ -118,6 +118,8 @@ export interface Product {
   active: boolean;
   /** Valor por defecto para `Inventory.minimumStock` la primera vez que una sucursal registra movimiento de este producto (BR-010). */
   minimumStock: number;
+  /** Precio vigente en la lista de precios global por defecto (BR-051); `null` si no tiene ninguno configurado. */
+  salePrice: number | null;
 }
 
 export interface CreateProductRequest {
@@ -126,6 +128,7 @@ export interface CreateProductRequest {
   description?: string | null;
   baseUnitOfMeasureId: number;
   minimumStock: number;
+  unitPrice: number;
 }
 
 export interface UpdateProductRequest {
@@ -315,12 +318,17 @@ export interface PurchaseReceiptResponse {
 export type SaleStatus = "CONFIRMED";
 
 export interface SaleItem {
+  /** BR-052: referencia necesaria para devolver esta línea. */
+  id: string;
   productId: string;
   quantity: number;
   unitOfMeasureId: string;
   unitPrice: number;
   discountPercentage: number;
   lineTotal: number;
+  /** Cantidad ya devuelta y cantidad que todavía se puede devolver (BR-052). */
+  quantityReturned: number;
+  pending: number;
 }
 
 export interface Sale {
@@ -328,12 +336,29 @@ export interface Sale {
   saleNumber: string;
   branchId: string;
   soldByUserId: string;
+  /** Resuelto por el backend (BR-054): `GET /users` es ADMIN-only. */
+  soldByUserName: string | null;
   status: SaleStatus;
   saleDate: string;
   items: SaleItem[];
   subtotal: number;
   discountTotal: number;
   total: number;
+}
+
+export interface CreateSaleReturnItemRequest {
+  saleItemId: number;
+  quantity: number;
+}
+
+export interface CreateSaleReturnRequest {
+  items: CreateSaleReturnItemRequest[];
+}
+
+export interface SaleReturnResponse {
+  saleId: string;
+  items: { saleItemId: string; quantity: number; quantityReturned: number; pending: number }[];
+  inventoryUpdates: { productId: string; branchId: string; quantityOnHand: number }[];
 }
 
 export interface CreateSaleItemRequest {

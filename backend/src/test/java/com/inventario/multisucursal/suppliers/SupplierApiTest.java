@@ -1,6 +1,8 @@
 package com.inventario.multisucursal.suppliers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.inventario.multisucursal.branches.Branch;
+import com.inventario.multisucursal.branches.BranchRepository;
 import com.inventario.multisucursal.users.RoleCode;
 import com.inventario.multisucursal.users.User;
 import com.inventario.multisucursal.users.UserRepository;
@@ -26,7 +28,21 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** RF-012: proveedores, ciclo mínimo. Lectura abierta; escritura OPERATOR/ADMIN (igual que products). */
+/**
+ * RF-012; BR-049: proveedores con CRUD completo abierto a cualquier rol
+ * autenticado (a diferencia de {@code products}/{@code branches}, no hay
+ * ningún subconjunto de roles con más capacidades que otro, ni restricción
+ * por sucursal). Cubre creación válida, identificación fiscal duplicada,
+ * lectura, edición sin alterar la identificación fiscal, activar/desactivar,
+ * eliminación real sin datos asociados, recurso inexistente y que los tres
+ * roles pueden ejercer cada escritura.
+ *
+ * <p>El caso "eliminar bloqueado por una orden de compra asociada" depende
+ * íntegramente de la FK {@code ON DELETE RESTRICT} real de PostgreSQL —
+ * Hibernate no la genera en el esquema de pruebas H2 porque el modelo no usa
+ * asociaciones JPA (docs/DECISIONS.md) — y se verificó en vivo con `curl`
+ * contra Docker Compose, igual que el caso análogo de {@code BranchApiTest}.
+ */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
@@ -46,30 +62,41 @@ class SupplierApiTest {
     private UserRepository userRepository;
 
     @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
     private SupplierRepository supplierRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    private String operatorToken;
+    private String adminToken;
     private String managerToken;
+    private String operatorToken;
 
     @BeforeEach
     void setUp() {
         supplierRepository.deleteAll();
         userRepository.deleteAll();
+        branchRepository.deleteAll();
 
+        Branch branch = branchRepository.save(new Branch("SUC-PROV", "Sucursal Proveedores"));
         String hash = passwordEncoder.encode(SEED_PASSWORD);
         userRepository.save(new User("Admin", "admin@test.local", hash, RoleCode.ADMIN, null));
+        userRepository.save(new User("Gerente", "manager@test.local", hash, RoleCode.MANAGER, branch.getId()));
+        userRepository.save(new User("Operador", "operator@test.local", hash, RoleCode.OPERATOR, branch.getId()));
 
-        operatorToken = login("admin@test.local");
-        managerToken = operatorToken;
+        adminToken = login("admin@test.local");
+        managerToken = login("manager@test.local");
+        operatorToken = login("operator@test.local");
     }
+
+    // ---- Creación válida y duplicados ----
 
     @Test
     void adminCanCreateSupplier() {
         ResponseEntity<SupplierResponse> response = post(
-                "/api/v1/suppliers", Map.of("name", "Proveedor Uno", "taxId", "TAX-001"), operatorToken, SupplierResponse.class);
+                "/api/v1/suppliers", Map.of("name", "Proveedor Uno", "taxId", "TAX-001"), adminToken, SupplierResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody().name()).isEqualTo("Proveedor Uno");
@@ -77,11 +104,19 @@ class SupplierApiTest {
     }
 
     @Test
+    void managerAndOperatorCanAlsoCreateSupplier() {
+        assertThat(post("/api/v1/suppliers", Map.of("name", "Del gerente", "taxId", "TAX-MGR"), managerToken, SupplierResponse.class)
+                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(post("/api/v1/suppliers", Map.of("name", "Del operador", "taxId", "TAX-OPR"), operatorToken, SupplierResponse.class)
+                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
     void creatingSupplierWithDuplicateTaxIdReturns409() {
-        post("/api/v1/suppliers", Map.of("name", "Uno", "taxId", "TAX-DUP"), operatorToken, SupplierResponse.class);
+        post("/api/v1/suppliers", Map.of("name", "Uno", "taxId", "TAX-DUP"), adminToken, SupplierResponse.class);
 
         ResponseEntity<String> response = post(
-                "/api/v1/suppliers", Map.of("name", "Dos", "taxId", "TAX-DUP"), operatorToken, String.class);
+                "/api/v1/suppliers", Map.of("name", "Dos", "taxId", "TAX-DUP"), adminToken, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).contains("\"code\":\"IDENTIFICACION_FISCAL_YA_EXISTE\"");
@@ -89,34 +124,23 @@ class SupplierApiTest {
 
     @Test
     void anyAuthenticatedRoleCanReadSuppliers() {
-        post("/api/v1/suppliers", Map.of("name", "Proveedor Lectura", "taxId", "TAX-READ"), operatorToken, SupplierResponse.class);
+        post("/api/v1/suppliers", Map.of("name", "Proveedor Lectura", "taxId", "TAX-READ"), adminToken, SupplierResponse.class);
 
-        ResponseEntity<String> response = getWithToken("/api/v1/suppliers", managerToken, String.class);
+        ResponseEntity<String> response = getWithToken("/api/v1/suppliers", operatorToken, String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("TAX-READ");
     }
 
-    @Test
-    void supplierCanBeDeactivatedAndReactivated() {
-        ResponseEntity<SupplierResponse> created = post(
-                "/api/v1/suppliers", Map.of("name", "Proveedor Baja", "taxId", "TAX-BAJA"), operatorToken, SupplierResponse.class);
-        String id = created.getBody().id();
-
-        ResponseEntity<SupplierResponse> deactivated = postAction("/api/v1/suppliers/" + id + "/deactivate", operatorToken, SupplierResponse.class);
-        assertThat(deactivated.getBody().active()).isFalse();
-
-        ResponseEntity<SupplierResponse> reactivated = postAction("/api/v1/suppliers/" + id + "/activate", operatorToken, SupplierResponse.class);
-        assertThat(reactivated.getBody().active()).isTrue();
-    }
+    // ---- Edición y activación/desactivación por cualquier rol ----
 
     @Test
     void updatingSupplierDoesNotChangeTaxId() {
         ResponseEntity<SupplierResponse> created = post(
-                "/api/v1/suppliers", Map.of("name", "Original", "taxId", "TAX-UPD"), operatorToken, SupplierResponse.class);
+                "/api/v1/suppliers", Map.of("name", "Original", "taxId", "TAX-UPD"), adminToken, SupplierResponse.class);
         String id = created.getBody().id();
 
         ResponseEntity<SupplierResponse> updated = patch(
-                "/api/v1/suppliers/" + id, Map.of("name", "Renombrado", "contactName", "Juan"), operatorToken, SupplierResponse.class);
+                "/api/v1/suppliers/" + id, Map.of("name", "Renombrado", "contactName", "Juan"), managerToken, SupplierResponse.class);
 
         assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(updated.getBody().name()).isEqualTo("Renombrado");
@@ -124,8 +148,45 @@ class SupplierApiTest {
     }
 
     @Test
+    void supplierCanBeDeactivatedAndReactivatedByAnyRole() {
+        ResponseEntity<SupplierResponse> created = post(
+                "/api/v1/suppliers", Map.of("name", "Proveedor Baja", "taxId", "TAX-BAJA"), adminToken, SupplierResponse.class);
+        String id = created.getBody().id();
+
+        ResponseEntity<SupplierResponse> deactivated = postAction("/api/v1/suppliers/" + id + "/deactivate", operatorToken, SupplierResponse.class);
+        assertThat(deactivated.getBody().active()).isFalse();
+
+        ResponseEntity<SupplierResponse> reactivated = postAction("/api/v1/suppliers/" + id + "/activate", managerToken, SupplierResponse.class);
+        assertThat(reactivated.getBody().active()).isTrue();
+    }
+
+    // ---- Eliminación real ----
+
+    @Test
+    void anyRoleCanDeleteSupplierWithNoAssociatedData() {
+        ResponseEntity<SupplierResponse> created = post(
+                "/api/v1/suppliers", Map.of("name", "Sin datos", "taxId", "TAX-VACIO"), adminToken, SupplierResponse.class);
+        Long id = Long.valueOf(created.getBody().id());
+
+        ResponseEntity<Void> response = delete("/api/v1/suppliers/" + id, operatorToken, Void.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(supplierRepository.findById(id)).isEmpty();
+    }
+
+    // ---- Recurso inexistente ----
+
+    @Test
     void operationsOnNonexistentSupplierReturn404() {
-        assertThat(getWithToken("/api/v1/suppliers/999999", operatorToken, String.class).getStatusCode())
+        long missingId = 999_999L;
+
+        assertThat(getWithToken("/api/v1/suppliers/" + missingId, adminToken, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(patch("/api/v1/suppliers/" + missingId, Map.of("name", "X"), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(postAction("/api/v1/suppliers/" + missingId + "/deactivate", adminToken, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(delete("/api/v1/suppliers/" + missingId, adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -144,6 +205,10 @@ class SupplierApiTest {
 
     private <T> ResponseEntity<T> postAction(String path, String token, Class<T> responseType) {
         return restTemplate.exchange(path, HttpMethod.POST, new HttpEntity<>(null, authHeaders(token)), responseType);
+    }
+
+    private <T> ResponseEntity<T> delete(String path, String token, Class<T> responseType) {
+        return restTemplate.exchange(path, HttpMethod.DELETE, new HttpEntity<>(authHeaders(token)), responseType);
     }
 
     private <T> ResponseEntity<T> patch(String path, Object requestBody, String token, Class<T> responseType) {

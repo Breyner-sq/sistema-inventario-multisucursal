@@ -27,6 +27,8 @@ import com.inventario.multisucursal.products.ProductRepository;
 import com.inventario.multisucursal.products.ProductUnit;
 import com.inventario.multisucursal.products.ProductUnitRepository;
 import com.inventario.multisucursal.users.RoleCode;
+import com.inventario.multisucursal.users.User;
+import com.inventario.multisucursal.users.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,7 +40,9 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Registro y confirmación de venta (flujo A, docs/CRITICAL_FLOWS.md; RF-017
@@ -69,6 +73,7 @@ public class SaleService {
     private final PriceRepository priceRepository;
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
+    private final UserRepository userRepository;
     private final DomainEventPublisher eventPublisher;
     private final AuthorizationService authorizationService;
     private final StockAlertService stockAlertService;
@@ -83,6 +88,7 @@ public class SaleService {
             PriceRepository priceRepository,
             InventoryRepository inventoryRepository,
             InventoryMovementRepository movementRepository,
+            UserRepository userRepository,
             DomainEventPublisher eventPublisher,
             AuthorizationService authorizationService,
             StockAlertService stockAlertService) {
@@ -95,6 +101,7 @@ public class SaleService {
         this.priceRepository = priceRepository;
         this.inventoryRepository = inventoryRepository;
         this.movementRepository = movementRepository;
+        this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
         this.stockAlertService = stockAlertService;
@@ -109,7 +116,7 @@ public class SaleService {
         var existingSale = saleRepository.findByClientReferenceId(idempotencyKey);
         if (existingSale.isPresent()) {
             Sale sale = existingSale.get();
-            return SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()));
+            return SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()), resolveUserName(sale.getSoldByUserId()));
         }
 
         authorizationService.requireBranchAccess(request.branchId());
@@ -177,13 +184,13 @@ public class SaleService {
         // en PurchaseReceiptService); se guarda explícitamente.
         sale = saleRepository.save(sale);
 
-        return SaleResponse.from(sale, items);
+        return SaleResponse.from(sale, items, resolveUserName(sale.getSoldByUserId()));
     }
 
     public SaleResponse getById(Long id) {
         Sale sale = findOrThrow(id);
         authorizationService.requireBranchAccess(sale.getBranchId());
-        return SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()));
+        return SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()), resolveUserName(sale.getSoldByUserId()));
     }
 
     public PageResponse<SaleResponse> list(Long branchId, SaleStatus status, Instant dateFrom, Instant dateTo, Pageable pageable) {
@@ -191,7 +198,22 @@ public class SaleService {
         Instant effectiveFrom = dateFrom != null ? dateFrom : MIN_SALE_DATE;
         Instant effectiveTo = dateTo != null ? dateTo : MAX_SALE_DATE;
         Page<Sale> page = saleRepository.search(effectiveBranchId, status, effectiveFrom, effectiveTo, pageable);
-        return PageResponse.from(page.map(sale -> SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()))));
+        Map<Long, String> namesByUserId = resolveUserNames(page.getContent());
+        return PageResponse.from(page.map(sale -> SaleResponse.from(
+                sale, saleItemRepository.findBySaleId(sale.getId()), namesByUserId.get(sale.getSoldByUserId()))));
+    }
+
+    /** BR-054: {@code GET /users} es ADMIN-only, así que el nombre del responsable se resuelve aquí, no en el cliente. */
+    private String resolveUserName(Long userId) {
+        return userRepository.findById(userId).map(User::getName).orElse(null);
+    }
+
+    private Map<Long, String> resolveUserNames(List<Sale> sales) {
+        if (sales.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> userIds = sales.stream().map(Sale::getSoldByUserId).distinct().toList();
+        return userRepository.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, User::getName));
     }
 
     /**
