@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiErrorResponse, jsonResponse, loginResponseFor, mockFetch, renderApp, seedSession } from "./harness";
+import { dashboardRoutes } from "./catalog";
 
 const emptyPage = { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 };
 
@@ -48,7 +49,7 @@ describe("Rutas protegidas", () => {
 describe("Navegación por rol", () => {
   it("el ADMIN ve la sección de usuarios", async () => {
     seedSession("ADMIN");
-    mockFetch(() => jsonResponse(200, emptyPage));
+    mockFetch(dashboardRoutes());
     renderApp("/");
 
     expect(await screen.findByRole("link", { name: /^Usuarios$/ })).toBeInTheDocument();
@@ -58,7 +59,7 @@ describe("Navegación por rol", () => {
     for (const role of ["OPERATOR", "MANAGER"] as const) {
       sessionStorage.clear();
       seedSession(role);
-      mockFetch(() => jsonResponse(200, emptyPage));
+      mockFetch(dashboardRoutes());
       const view = renderApp("/");
 
       expect(await screen.findByRole("link", { name: /^Inventario$/ })).toBeInTheDocument();

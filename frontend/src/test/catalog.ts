@@ -338,3 +338,25 @@ export function catalogResponse(url: string): Response | undefined {
   if (url.includes("/routes")) return jsonResponse(200, page(ROUTES));
   return undefined;
 }
+
+/**
+ * Respuestas para las cuatro consultas del Dashboard, con datos válidos por
+ * defecto. La raíz ("/") redirige al Dashboard para cualquier rol, así que
+ * cualquier prueba que renderice "/" (aunque no sea sobre el Dashboard en sí)
+ * necesita esto — no solo `dashboard.test.tsx` — o el panel de tendencia de
+ * ventas revienta al recibir una forma de respuesta genérica en vez de la suya.
+ */
+export function dashboardRoutes(overrides: (url: string) => Response | undefined = () => undefined) {
+  return (url: string) => {
+    const custom = overrides(url);
+    if (custom) return custom;
+    const catalog = catalogResponse(url);
+    if (catalog) return catalog;
+    if (url.includes("/dashboard/sales-summary")) return jsonResponse(200, salesTrend());
+    if (url.includes("/dashboard/inventory-rotation")) return jsonResponse(200, inventoryDemand());
+    if (url.includes("/dashboard/active-transfers")) return jsonResponse(200, activeTransfersDashboard());
+    if (url.includes("/dashboard/replenishment")) return jsonResponse(200, replenishmentDashboard());
+    if (url.includes("/dashboard/branch-comparison")) return jsonResponse(200, branchComparison());
+    return jsonResponse(200, { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
+  };
+}

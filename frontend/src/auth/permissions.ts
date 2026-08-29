@@ -23,7 +23,6 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Inicio", path: "/" },
   { label: "Dashboard", path: "/dashboard" },
   { label: "Inventario", path: "/inventario" },
   { label: "Alertas", path: "/inventario/alertas" },

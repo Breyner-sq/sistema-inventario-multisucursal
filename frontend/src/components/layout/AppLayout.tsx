@@ -17,7 +17,7 @@ export function AppLayout() {
           <ul>
             {items.map((item) => (
               <li key={item.path}>
-                <NavLink to={item.path} end={item.path === "/"}>
+                <NavLink to={item.path}>
                   {item.label}
                 </NavLink>
               </li>

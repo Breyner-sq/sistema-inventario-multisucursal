@@ -2,29 +2,7 @@ import { describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { jsonResponse, mockFetch, renderApp, seedSession } from "./harness";
-import {
-  activeTransfersDashboard,
-  branchComparison,
-  catalogResponse,
-  inventoryDemand,
-  replenishmentDashboard,
-  salesTrend,
-} from "./catalog";
-
-function dashboardRoutes(overrides: (url: string) => Response | undefined = () => undefined) {
-  return (url: string) => {
-    const custom = overrides(url);
-    if (custom) return custom;
-    const catalog = catalogResponse(url);
-    if (catalog) return catalog;
-    if (url.includes("/dashboard/sales-summary")) return jsonResponse(200, salesTrend());
-    if (url.includes("/dashboard/inventory-rotation")) return jsonResponse(200, inventoryDemand());
-    if (url.includes("/dashboard/active-transfers")) return jsonResponse(200, activeTransfersDashboard());
-    if (url.includes("/dashboard/replenishment")) return jsonResponse(200, replenishmentDashboard());
-    if (url.includes("/dashboard/branch-comparison")) return jsonResponse(200, branchComparison());
-    return jsonResponse(200, { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
-  };
-}
+import { dashboardRoutes, replenishmentDashboard, salesTrend } from "./catalog";
 
 describe("Dashboard de una sucursal", () => {
   it("OPERATOR ve su sucursal fija y los cuatro paneles con datos", async () => {

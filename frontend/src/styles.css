@@ -119,14 +119,38 @@ a {
 }
 a:hover { text-decoration: underline; }
 
-.app__brand { font-weight: 600; text-decoration: none; color: inherit; }
-.app__header nav ul { display: flex; gap: 1.25rem; list-style: none; margin: 0; padding: 0; }
+.app__brand { font-weight: 600; text-decoration: none; color: inherit; margin-right: 0.5rem; }
+
+/*
+ * Menú de módulos como grupo de "pills" (ajuste explícito de atractivo y
+ * simetría): antes cada módulo era solo texto suelto separado por un
+ * `gap`, sin ninguna superficie propia — sin zona de click visible y sin
+ * distinguirse del texto corrido de la página. El mismo padding vertical/
+ * horizontal en los 12 ítems (activo o no) los vuelve simétricos entre sí
+ * sin importar el largo del texto ("Inicio" vs. "Transferencias"): misma
+ * altura y forma, solo cambia el ancho según el contenido.
+ */
+.app__header nav ul {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .app__header nav a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-pill);
   text-decoration: none;
   color: var(--muted);
-  transition: color var(--duration-fast) var(--ease-spring);
+  font-size: 0.92rem;
+  transition: color var(--duration-fast) var(--ease-spring), background var(--duration-fast) ease;
 }
-.app__header nav a[aria-current="page"] { color: var(--accent); font-weight: 600; }
+.app__header nav a:hover { color: var(--text); background: rgba(0, 0, 0, 0.05); }
+.app__header nav a[aria-current="page"] { color: var(--accent); font-weight: 600; background: rgba(0, 113, 227, 0.1); }
 .app__session { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
 .app__content { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
 
@@ -180,7 +204,71 @@ input, select, textarea {
   background: var(--surface);
   transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
-select { cursor: pointer; }
+/*
+ * `appearance: auto` (por defecto) hace que el navegador dibuje su propio
+ * cuadro de `<select>` con flecha e "chrome" nativo — mismo padding/borde
+ * que un input, pero ~2px más alto y con un color de flecha que no sigue la
+ * paleta de la aplicación (pedido explícito: mismo tamaño y color que las
+ * cajas de texto). `appearance: none` + una flecha propia por
+ * `background-image` iguala la altura exacta y da una flecha del mismo
+ * `--muted` que el resto de la tipografía secundaria.
+ */
+select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236e6e73' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5.5 8l4.5 4.5L14.5 8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 0.85rem;
+}
+select::-ms-expand { display: none; }
+
+/*
+ * Checkbox con el mismo lenguaje visual que inputs/selects (ajuste de
+ * simetría pedido explícitamente): sin esto, un `<input type="checkbox">`
+ * hereda el `padding`/borde de la regla general de arriba pero los ignora
+ * (una casilla nativa no respeta `padding` como una caja de texto) y sigue
+ * dibujando el cuadrado nativo del sistema operativo — ni el tamaño ni el
+ * color quedan bajo control de la aplicación. `appearance: none` + un
+ * tamaño y borde propios, con relleno de acento y un check propio al
+ * marcarse, es lo mismo que ya se hizo para `<select>` con su flecha nativa.
+ */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+input[type="checkbox"]:hover:not([disabled]) { border-color: var(--border-strong); }
+input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
 
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
   outline: none;
@@ -274,7 +362,21 @@ tbody tr:last-child td { border-bottom: none; }
 .filters .field { margin-bottom: 0; }
 .field--check label { display: flex; align-items: center; gap: 0.5rem; }
 
-.row__actions { display: flex; gap: 0.5rem; align-items: center; white-space: nowrap; }
+/*
+ * NO `display: flex` aquí (ajuste de simetría pedido explícitamente): esta
+ * clase vive directamente en un `<td>`. `display: flex` le cambia el modo de
+ * caja de `table-cell` a flex, y una celda flex deja de estirarse a la altura
+ * de su fila — se queda con el alto de su propio contenido, más bajo que las
+ * filas donde otra columna hace wrap a dos líneas (nombre largo, sucursal,
+ * proveedor…). El resultado visible: la columna de acciones "flota" más
+ * arriba que el resto de esa fila, dando a la tabla un aspecto irregular en
+ * vez de una cuadrícula pareja. `white-space: nowrap` + separación por
+ * margen entre hijos logra el mismo renglón de botones sin salir del modelo
+ * de tabla, dejando que la celda sí ocupe el alto completo de su fila.
+ */
+.row__actions { white-space: nowrap; }
+.row__actions > * { vertical-align: middle; }
+.row__actions > * + * { margin-left: 0.5rem; }
 .pagination { display: flex; gap: 1rem; align-items: center; padding: 1rem 0; color: var(--muted); font-size: 0.9rem; }
 
 .badge {

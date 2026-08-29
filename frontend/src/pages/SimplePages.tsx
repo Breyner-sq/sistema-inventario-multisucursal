@@ -1,22 +1,4 @@
 import { Link } from "react-router-dom";
-import { useAuth } from "../auth/useAuth";
-
-export function HomePage() {
-  const { user } = useAuth();
-  return (
-    <section>
-      <h1>Hola, {user?.name}</h1>
-      <p>
-        Sesión iniciada como <strong>{user?.role}</strong>
-        {user?.branchId ? ` · sucursal ${user.branchId}` : " · alcance global"}.
-      </p>
-      <p>
-        La arquitectura base del frontend está lista; las pantallas de negocio se construyen en fases
-        siguientes (ver <code>docs/STATUS.md</code>).
-      </p>
-    </section>
-  );
-}
 
 /** Marcador para rutas ya enrutadas cuya pantalla aún no se construye. */
 export function PlaceholderPage({ title }: { title: string }) {

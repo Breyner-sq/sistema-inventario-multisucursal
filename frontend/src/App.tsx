@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute, RequireRole } from "./routes/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
@@ -23,7 +23,7 @@ import { LogisticsCompliancePage } from "./pages/logistics/LogisticsCompliancePa
 import { DashboardPage } from "./pages/dashboard/DashboardPage";
 import { BranchComparisonPage } from "./pages/dashboard/BranchComparisonPage";
 import { UsersPage } from "./pages/users/UsersPage";
-import { ForbiddenPage, HomePage, NotFoundPage } from "./pages/SimplePages";
+import { ForbiddenPage, NotFoundPage } from "./pages/SimplePages";
 
 /**
  * Mapa de rutas. Todo lo que cuelga de `ProtectedRoute` exige sesión; lo que
@@ -37,7 +37,10 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<HomePage />} />
+          {/* Sin módulo "Inicio" propio (por instrucción explícita, no aportaba nada
+              más que un saludo estático) — la raíz redirige directo al Dashboard,
+              landing útil para cualquier rol autenticado. */}
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/sucursales" element={<BranchesPage />} />
           <Route path="/inventario" element={<InventoryPage />} />
