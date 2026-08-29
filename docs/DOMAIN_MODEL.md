@@ -335,52 +335,226 @@ stateDiagram-v2
 
 ## 5. Diagrama entidad-relación
 
+> Regenerado a partir del esquema real aplicado por Flyway (`V1`–`V30`, `backend/src/main/resources/db/migration/`), no del diseño previo a la implementación. Refleja columnas y relaciones tal como existen hoy en PostgreSQL, incluidas las incorporadas en fases posteriores al diseño inicial: `stock_alert` (V27), `route`/`transfer.route_id` (V24–V25), `product.minimum_stock` (V29), `sale_item.quantity_returned`/`version` (V30, BR-052), `users.deactivation_reason` (V26) y las tres FK de origen opcionales de `inventory_movement` (V15, V20, V23).
+
 ```mermaid
 erDiagram
-    BRANCH ||--o{ USER : "emplea"
-    ROLE ||--o{ USER : "clasifica"
+    ROLE {
+        varchar code PK
+        varchar name
+    }
+    BRANCH {
+        bigint id PK
+        varchar code UK
+        varchar name
+        varchar location
+        boolean active
+    }
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email UK
+        varchar role_code FK
+        bigint branch_id FK
+        boolean active
+        varchar deactivation_reason
+    }
+    UNIT_OF_MEASURE {
+        bigint id PK
+        varchar code UK
+        varchar name
+    }
+    PRODUCT {
+        bigint id PK
+        varchar sku UK
+        varchar name
+        bigint base_unit_of_measure_id FK
+        numeric minimum_stock
+        boolean active
+    }
+    PRODUCT_UNIT {
+        bigint id PK
+        bigint product_id FK
+        bigint unit_of_measure_id FK
+        numeric conversion_factor_to_base
+        boolean is_base_unit
+    }
+    INVENTORY {
+        bigint id PK
+        bigint product_id FK
+        bigint branch_id FK
+        numeric quantity_on_hand
+        numeric average_unit_cost
+        numeric minimum_stock
+        bigint version
+    }
+    INVENTORY_MOVEMENT {
+        bigint id PK
+        bigint product_id FK
+        bigint branch_id FK
+        varchar direction
+        varchar reason
+        numeric quantity
+        bigint unit_of_measure_id FK
+        bigint responsible_user_id FK
+        timestamptz occurred_at
+        varchar idempotency_key UK
+        bigint purchase_order_item_id FK
+        bigint sale_item_id FK
+        bigint transfer_item_id FK
+    }
+    STOCK_ALERT {
+        bigint id PK
+        bigint inventory_id FK
+        varchar status
+        timestamptz triggered_at
+        timestamptz resolved_at
+    }
+    SUPPLIER {
+        bigint id PK
+        varchar name
+        varchar tax_id UK
+        boolean active
+    }
+    PURCHASE_ORDER {
+        bigint id PK
+        varchar order_number UK
+        bigint supplier_id FK
+        bigint branch_id FK
+        varchar status
+        bigint created_by_user_id FK
+    }
+    PURCHASE_ORDER_ITEM {
+        bigint id PK
+        bigint purchase_order_id FK
+        bigint product_id FK
+        bigint unit_of_measure_id FK
+        numeric quantity_ordered
+        numeric quantity_received
+        numeric unit_price
+        numeric line_total
+        bigint version
+    }
+    PRICE_LIST {
+        bigint id PK
+        varchar name
+        bigint branch_id FK
+        boolean active
+    }
+    PRICE {
+        bigint id PK
+        bigint price_list_id FK
+        bigint product_id FK
+        numeric unit_price
+        timestamptz valid_from
+        timestamptz valid_to
+    }
+    SALE {
+        bigint id PK
+        varchar sale_number UK
+        bigint branch_id FK
+        bigint sold_by_user_id FK
+        bigint price_list_id FK
+        varchar status
+        numeric total
+        varchar client_reference_id UK
+    }
+    SALE_ITEM {
+        bigint id PK
+        bigint sale_id FK
+        bigint product_id FK
+        bigint unit_of_measure_id FK
+        numeric quantity
+        numeric unit_price
+        numeric line_total
+        numeric quantity_returned
+        bigint version
+    }
+    TRANSFER {
+        bigint id PK
+        varchar transfer_number UK
+        bigint origin_branch_id FK
+        bigint destination_branch_id FK
+        bigint route_id FK
+        varchar status
+        bigint requested_by_user_id FK
+        bigint approved_by_user_id FK
+        varchar client_reference_id UK
+    }
+    TRANSFER_ITEM {
+        bigint id PK
+        bigint transfer_id FK
+        bigint product_id FK
+        bigint unit_of_measure_id FK
+        numeric quantity_requested
+        numeric quantity_approved
+        numeric quantity_shipped
+        numeric quantity_received
+        numeric quantity_missing
+        varchar discrepancy_treatment
+        bigint treatment_by_user_id FK
+        varchar treatment_notes
+        bigint follow_up_transfer_id FK
+    }
+    ROUTE {
+        bigint id PK
+        bigint origin_branch_id FK
+        bigint destination_branch_id FK
+        varchar classification
+    }
+
+    ROLE ||--o{ USERS : "clasifica"
+    BRANCH ||--o{ USERS : "emplea"
+
     BRANCH ||--o{ INVENTORY : "tiene stock en"
     PRODUCT ||--o{ INVENTORY : "se stockea como"
     INVENTORY ||--o{ STOCK_ALERT : "genera"
 
     PRODUCT ||--o{ PRODUCT_UNIT : "admite"
     UNIT_OF_MEASURE ||--o{ PRODUCT_UNIT : "define"
+    UNIT_OF_MEASURE ||--o{ PRODUCT : "es unidad base de"
 
     PRODUCT ||--o{ INVENTORY_MOVEMENT : "afecta"
     BRANCH ||--o{ INVENTORY_MOVEMENT : "ocurre en"
-    USER ||--o{ INVENTORY_MOVEMENT : "responsable de"
+    USERS ||--o{ INVENTORY_MOVEMENT : "responsable de"
     UNIT_OF_MEASURE ||--o{ INVENTORY_MOVEMENT : "unidad de"
 
     SUPPLIER ||--o{ PURCHASE_ORDER : "recibe pedidos de"
     BRANCH ||--o{ PURCHASE_ORDER : "recibe en"
-    USER ||--o{ PURCHASE_ORDER : "crea"
+    USERS ||--o{ PURCHASE_ORDER : "crea"
     PURCHASE_ORDER ||--o{ PURCHASE_ORDER_ITEM : "contiene"
     PRODUCT ||--o{ PURCHASE_ORDER_ITEM : "referenciado en"
+    UNIT_OF_MEASURE ||--o{ PURCHASE_ORDER_ITEM : "unidad de"
     PURCHASE_ORDER_ITEM ||--o{ INVENTORY_MOVEMENT : "genera"
 
     BRANCH ||--o{ SALE : "registra"
-    USER ||--o{ SALE : "vende"
+    USERS ||--o{ SALE : "vende"
     PRICE_LIST ||--o{ SALE : "aplica en"
     SALE ||--o{ SALE_ITEM : "contiene"
     PRODUCT ||--o{ SALE_ITEM : "referenciado en"
+    UNIT_OF_MEASURE ||--o{ SALE_ITEM : "unidad de"
     SALE_ITEM ||--o{ INVENTORY_MOVEMENT : "genera"
 
+    BRANCH ||--o{ PRICE_LIST : "acota (opcional)"
     PRICE_LIST ||--o{ PRICE : "versiona"
     PRODUCT ||--o{ PRICE : "tiene precio en"
 
     BRANCH ||--o{ TRANSFER : "origina"
     BRANCH ||--o{ TRANSFER : "recibe"
+    BRANCH ||--o{ ROUTE : "origen de"
+    BRANCH ||--o{ ROUTE : "destino de"
     ROUTE ||--o{ TRANSFER : "clasifica"
-    USER ||--o{ TRANSFER : "solicita"
-    USER ||--o{ TRANSFER : "aprueba"
+    USERS ||--o{ TRANSFER : "solicita"
+    USERS ||--o{ TRANSFER : "aprueba"
     TRANSFER ||--o{ TRANSFER_ITEM : "contiene"
     PRODUCT ||--o{ TRANSFER_ITEM : "referenciado en"
+    UNIT_OF_MEASURE ||--o{ TRANSFER_ITEM : "unidad de"
     TRANSFER_ITEM ||--o{ INVENTORY_MOVEMENT : "genera"
-    USER ||--o{ TRANSFER_ITEM : "trata faltante de"
+    USERS ||--o{ TRANSFER_ITEM : "trata faltante de"
     TRANSFER_ITEM ||--o| TRANSFER : "reenvía como"
 ```
 
-*(Mermaid `erDiagram` no permite anotar directamente dos relaciones distintas entre las mismas dos entidades con etiquetas separadas sin repetir el par; `BRANCH ||--o{ TRANSFER` aparece dos veces intencionalmente para representar origen y destino como relaciones independientes.)*
+*(Mermaid `erDiagram` no permite anotar directamente dos relaciones distintas entre las mismas dos entidades con etiquetas separadas sin repetir el par; `BRANCH ||--o{ TRANSFER` y `BRANCH ||--o{ ROUTE` aparecen dos veces cada una intencionalmente, para representar origen y destino como relaciones independientes. La entidad se nombra `USERS` — no `USER`, palabra reservada en PostgreSQL — para coincidir con el nombre real de tabla.)*
 
 ## 6. Resumen de integridad a nivel de base de datos
 
@@ -400,18 +574,20 @@ Constraints clave que PostgreSQL debe aplicar (no la capa de aplicación en soli
 | `transfer_item` | `CHECK (quantity_received IS NULL OR quantity_received <= quantity_shipped)` | No se puede recibir más de lo despachado. |
 | Tablas de historial → `Branch`/`Product`/`User`/`Supplier` | `FOREIGN KEY ... ON DELETE RESTRICT` | Impide eliminar una entidad de referencia si ya tiene historial (3.9). |
 
-## 7. Decisiones que requieren aprobación antes de crear migraciones
+## 7. Decisiones que requerían aprobación antes de crear migraciones
 
-1. **Estrategia de clave primaria:** `BIGINT IDENTITY` propuesto para todas las tablas (sección 1) frente a `UUID`. Cambiar esto después de generar migraciones es costoso — se pide confirmación explícita antes de avanzar.
-2. **No modelar `Organization`:** se asume una sola organización (sin multi-tenencia) porque ningún requisito lo exige; confirmar que esta suposición es correcta antes de fijar el esquema.
-3. **No modelar `Customer`/Cliente en `Sale`:** las ventas se asumen de mostrador/anónimas, sin registrar comprador; confirmar si se requiere en algún momento de esta entrega.
-4. **`Route` en vez de una entidad `Shipment`/`LogisticsRecord` independiente:** válido mientras cada transferencia tenga un único tramo de envío (supuesto actual); confirmar que no se esperan transferencias multi-tramo.
-5. **Rol que aprueba `Transfer` y define el tratamiento de faltantes:** modelado como el Gerente de sucursal (columnas `approved_by_user_id`, `treatment_by_user_id`), consistente con el supuesto ya registrado en `PROJECT_BRIEF.md`/`USE_CASES.md` — sigue pendiente de confirmación explícita.
-6. **Stock mínimo por producto+sucursal** (columna en `Inventory`) en vez de un valor único global por producto — confirmar si es el comportamiento esperado o si debe ser configurable de otra forma.
-7. **`TransferItem` admite múltiples productos por transferencia** (uno-a-muchos), generalizando el flujo del documento fuente que describe una transferencia en términos de un producto — confirmar que esta generalización es aceptable.
-8. **Estrategia de concurrencia por defecto:** bloqueo optimista (`version` en `Inventory`) como mecanismo único inicial, con bloqueo pesimista solo si un flujo crítico específico lo justifica más adelante (`docs/ARCHITECTURE.md`, sección 7) — confirmar que ningún flujo requiere pesimismo desde el arranque.
-9. **Política de anulación de ventas:** si `Sale` admite el estado `VOIDED` o si toda corrección se maneja exclusivamente como un ajuste de inventario independiente, sin tocar el estado de la venta original.
-10. **Herramienta de migración de esquema** (Flyway vs. Liquibase) — todavía pendiente según `docs/STATUS.md`, necesaria antes de materializar cualquiera de las tablas descritas aquí.
+Todas las tablas ya están materializadas (`V1`–`V30`); esta sección se conserva como registro histórico de qué se decidió y cómo, no como lista de pendientes. Estado real según el esquema aplicado y `docs/STATUS.md`:
+
+1. **Estrategia de clave primaria:** ✅ Resuelto — `BIGINT GENERATED BY DEFAULT AS IDENTITY` en todas las tablas, sin excepción (`UUID` no se usó).
+2. **No modelar `Organization`:** ✅ Resuelto — no existe tabla `organization`; el esquema sigue siendo de una sola organización, sin multi-tenencia.
+3. **No modelar `Customer`/Cliente en `Sale`:** ✅ Resuelto — `sale` no tiene FK a cliente; las ventas siguen siendo de mostrador/anónimas.
+4. **`Route` en vez de `Shipment`/`LogisticsRecord`:** ✅ Resuelto — `route` (V24) solo clasifica el par origen-destino; transportista y fechas viven en `transfer`, tal como se decidió. Sigue asumiendo un único tramo por transferencia.
+5. **Rol que aprueba `Transfer` y trata faltantes:** ✅ Resuelto como Gerente de sucursal (`transfer.approved_by_user_id`, `transfer_item.treatment_by_user_id`); `docs/STATUS.md` registra además una ampliación posterior de permisos de `MANAGER` en compras/transferencias (BR-047).
+6. **Stock mínimo por producto+sucursal:** ✅ Resuelto con un matiz — `inventory.minimum_stock` es el valor real por sucursal; `product.minimum_stock` se agregó después (V29, BR-048) como valor de siembra que hereda cada sucursal la primera vez que registra movimiento de ese producto, no como un mínimo global que sustituya al de `Inventory`.
+7. **`TransferItem` admite múltiples productos por transferencia:** ✅ Resuelto — relación uno-a-muchos confirmada (`transfer_item.transfer_id`), sin restricción de una sola línea por transferencia.
+8. **Estrategia de concurrencia por defecto:** ✅ Resuelto — bloqueo optimista manual (columna `version`) en `inventory`, `purchase_order_item` y `sale_item` (V30, BR-052); no se introdujo bloqueo pesimista en ningún flujo.
+9. **Política de anulación de ventas:** parcialmente resuelto en otra dirección — `sale.status` sigue aceptando `'VOIDED'` en el `CHECK`, pero la aplicación (`SaleStatus`) solo produce `CONFIRMED`; las devoluciones se modelaron aparte, como cantidad acumulada en `sale_item.quantity_returned` (V30, BR-052), no como anulación de la venta completa.
+10. **Herramienta de migración de esquema:** ✅ Resuelto — Flyway (convención `V<n>__descripcion.sql` en `backend/src/main/resources/db/migration/`).
 
 ---
 

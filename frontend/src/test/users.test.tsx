@@ -77,6 +77,39 @@ describe("Pantalla de usuarios", () => {
       expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
     });
 
+    it("señala que las contraseñas no coinciden y no envía nada", async () => {
+      seedSession("ADMIN");
+      const fetchSpy = mockFetch(userRoutes());
+      renderApp("/usuarios");
+
+      await userEvent.click(await screen.findByRole("button", { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.type(within(dialog).getByLabelText(/^contraseña$/i), "ClaveSegura1");
+      await userEvent.type(within(dialog).getByLabelText(/confirmar contraseña/i), "OtraClave1");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      expect(await screen.findByText(/las contraseñas no coinciden/i)).toBeInTheDocument();
+      expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+    });
+
+    it("alterna entre ocultar y mostrar el texto de la contraseña", async () => {
+      seedSession("ADMIN");
+      mockFetch(userRoutes());
+      renderApp("/usuarios");
+
+      await userEvent.click(await screen.findByRole("button", { name: /nuevo usuario/i }));
+      const dialog = await screen.findByRole("dialog");
+      const passwordInput = within(dialog).getByLabelText(/^contraseña$/i);
+      expect(passwordInput).toHaveAttribute("type", "password");
+      const passwordWrapper = within(passwordInput.parentElement as HTMLElement);
+
+      await userEvent.click(passwordWrapper.getByRole("button", { name: /^mostrar$/i }));
+      expect(passwordInput).toHaveAttribute("type", "text");
+
+      await userEvent.click(passwordWrapper.getByRole("button", { name: /^ocultar$/i }));
+      expect(passwordInput).toHaveAttribute("type", "password");
+    });
+
     it("pide sucursal cuando el rol elegido no es ADMIN", async () => {
       seedSession("ADMIN");
       mockFetch(userRoutes());
@@ -125,6 +158,7 @@ describe("Pantalla de usuarios", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Nuevo Operador");
       await userEvent.type(within(dialog).getByLabelText(/correo electrónico/i), "nuevo@inventario.local");
       await userEvent.type(within(dialog).getByLabelText(/^contraseña$/i), "ClaveSegura1");
+      await userEvent.type(within(dialog).getByLabelText(/confirmar contraseña/i), "ClaveSegura1");
       await userEvent.selectOptions(within(dialog).getByLabelText(/^rol$/i), "OPERATOR");
       await userEvent.selectOptions(await within(dialog).findByLabelText(/^sucursal$/i), BRANCHES[0].id);
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
@@ -158,6 +192,7 @@ describe("Pantalla de usuarios", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Otro Admin");
       await userEvent.type(within(dialog).getByLabelText(/correo electrónico/i), "otro.admin@inventario.local");
       await userEvent.type(within(dialog).getByLabelText(/^contraseña$/i), "ClaveSegura1");
+      await userEvent.type(within(dialog).getByLabelText(/confirmar contraseña/i), "ClaveSegura1");
       await userEvent.selectOptions(within(dialog).getByLabelText(/^rol$/i), "ADMIN");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 
@@ -182,6 +217,7 @@ describe("Pantalla de usuarios", () => {
       await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Duplicado");
       await userEvent.type(within(dialog).getByLabelText(/correo electrónico/i), "admin@inventario.local");
       await userEvent.type(within(dialog).getByLabelText(/^contraseña$/i), "ClaveSegura1");
+      await userEvent.type(within(dialog).getByLabelText(/confirmar contraseña/i), "ClaveSegura1");
       await userEvent.selectOptions(within(dialog).getByLabelText(/^rol$/i), "ADMIN");
       await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
 

@@ -249,6 +249,22 @@ a:hover { text-decoration: underline; }
 .field { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
 .field__error { color: var(--danger); font-size: 0.85rem; }
 
+.field__password-wrapper { position: relative; display: flex; }
+.field__password-wrapper input { flex: 1; padding-right: 4.5rem; }
+.field__password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  padding: 0.3rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.field__password-toggle:hover:not([disabled]) { color: var(--text); border-color: transparent; }
+
 /*
  * Un único rectángulo de formulario para input/select/textarea, sin importar
  * si viven dentro de `.field` o sueltos en una celda de tabla (líneas de
@@ -450,6 +466,25 @@ tbody tr:last-child td { border-bottom: none; }
 .row__actions { white-space: nowrap; }
 .row__actions > * { vertical-align: middle; }
 .row__actions > * + * { margin-left: 0.5rem; }
+
+/*
+ * Grupo de acciones de Usuarios: esta fila suma hasta tres botones
+ * (Editar/Desactivar-Activar/Eliminar), pedido explícitamente en una sola
+ * línea horizontal (no en dos líneas). En una sola línea sin más, esos
+ * botones empujaban la tabla ~15px más allá del ancho de `.app__content`
+ * (912px) y forzaban un scroll horizontal innecesario. En vez de doblar los
+ * botones a una segunda línea, se libera ese espacio dejando que la columna
+ * Correo —la otra que fuerza ancho, por ser una cadena sin espacios que de
+ * otro modo nunca se parte— se doble con `.cell-break` (ver más abajo). No
+ * se usa `display: flex` directamente en el `<td>` (ver nota de
+ * `.row__actions` más abajo, altura de fila); el flex vive en un `<div>`
+ * interno para no perder el `table-cell` que estira la celda a la altura
+ * completa de la fila.
+ */
+.row__actions-group { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.5rem; }
+
+/* Permite partir cadenas sin espacios (correos) que de otro modo forzarían el ancho de la tabla. */
+.cell-break { overflow-wrap: anywhere; }
 .pagination { display: flex; gap: 1rem; align-items: center; padding: 1rem 0; color: var(--muted); font-size: 0.9rem; }
 
 .badge {

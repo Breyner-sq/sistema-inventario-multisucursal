@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { Field } from "../components/form/Field";
+import { Field, PasswordField } from "../components/form/Field";
 import { ErrorState } from "../components/state/states";
 
 export function LoginPage() {
@@ -49,10 +49,9 @@ export function LoginPage() {
             required
             autoComplete="username"
           />
-          <Field
+          <PasswordField
             id="password"
             label="Contraseña"
-            type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required

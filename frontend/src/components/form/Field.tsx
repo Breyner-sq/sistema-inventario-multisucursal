@@ -1,5 +1,6 @@
 import { ApiError } from "../../api/ApiError";
 import { errorMessageFor } from "../state/states";
+import { useState } from "react";
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 /**
@@ -32,6 +33,57 @@ export function Field({
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <input id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} {...inputProps} />
+      {error ? (
+        <span id={errorId} role="alert" className="field__error">
+          {error}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Igual que `Field`, para contraseñas: añade un botón para alternar entre
+ * texto oculto y visible, sin cambiar el tipo de dato que viaja al backend
+ * (el propio valor del input, nunca uno derivado en el cliente).
+ */
+export function PasswordField({
+  label,
+  error,
+  id,
+  ...inputProps
+}: { label: string; error?: string; id: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [visible, setVisible] = useState(false);
+  const errorId = `${id}-error`;
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <div className="field__password-wrapper">
+        <input
+          id={id}
+          type={visible ? "text" : "password"}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          {...inputProps}
+        />
+        {/*
+         * Sin `aria-label`: el propio texto del botón ("Mostrar"/"Ocultar")
+         * ya es su nombre accesible. Un `aria-label` que repita la palabra
+         * "contraseña" (p. ej. "Mostrar contraseña") hace que
+         * `getByLabelText(/contraseña/i)` — el patrón ya usado en las pruebas
+         * de login/rutas para ubicar el input — encuentre dos elementos
+         * (el input y este botón) en vez de uno.
+         */}
+        <button
+          type="button"
+          className="field__password-toggle"
+          onClick={() => setVisible((current) => !current)}
+          aria-pressed={visible}
+          tabIndex={-1}
+        >
+          {visible ? "Ocultar" : "Mostrar"}
+        </button>
+      </div>
       {error ? (
         <span id={errorId} role="alert" className="field__error">
           {error}

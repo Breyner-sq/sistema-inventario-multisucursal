@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { createUser, updateUser } from "../../api/endpoints/users";
 import { queryPrefixes } from "../../api/queryClient";
-import { Field, FormErrorMessage, SelectField } from "../../components/form/Field";
+import { Field, FormErrorMessage, PasswordField, SelectField } from "../../components/form/Field";
 import { toFormErrors } from "../../components/form/formErrors";
 import { Modal } from "../../components/ui/Modal";
 import type { Branch, Role, RoleInfo, User } from "../../types/api";
@@ -33,6 +33,7 @@ export function UserFormDialog({
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<Role | "">(user?.role ?? "");
   const [branchId, setBranchId] = useState(user?.branchId ?? "");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
@@ -72,6 +73,7 @@ export function UserFormDialog({
     if (!name.trim()) errors.name = "El nombre es obligatorio.";
     if (!email.trim()) errors.email = "El correo es obligatorio.";
     if (!isEdit && password.length < 8) errors.password = "La contraseña debe tener al menos 8 caracteres.";
+    if (!isEdit && password !== confirmPassword) errors.confirmPassword = "Las contraseñas no coinciden.";
     if (!role) errors.role = "Selecciona un rol.";
     if (requiresBranch && !branchId) errors.branchId = "Selecciona la sucursal.";
     setLocalErrors(errors);
@@ -95,15 +97,26 @@ export function UserFormDialog({
         />
 
         {!isEdit ? (
-          <Field
-            id="user-password"
-            label="Contraseña"
-            type="password"
-            value={password}
-            maxLength={100}
-            onChange={(event) => setPassword(event.target.value)}
-            error={errorFor("password")}
-          />
+          <>
+            <PasswordField
+              id="user-password"
+              label="Contraseña"
+              value={password}
+              maxLength={100}
+              onChange={(event) => setPassword(event.target.value)}
+              error={errorFor("password")}
+              autoComplete="new-password"
+            />
+            <PasswordField
+              id="user-confirm-password"
+              label="Confirmar contraseña"
+              value={confirmPassword}
+              maxLength={100}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              error={errorFor("confirmPassword")}
+              autoComplete="new-password"
+            />
+          </>
         ) : null}
 
         <SelectField

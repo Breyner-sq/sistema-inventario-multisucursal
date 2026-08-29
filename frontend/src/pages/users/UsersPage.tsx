@@ -109,7 +109,7 @@ export function UsersPage() {
                   return (
                     <tr key={item.id}>
                       <td>{item.name}</td>
-                      <td>{item.email}</td>
+                      <td className="cell-break">{item.email}</td>
                       <td>{item.role}</td>
                       <td>{item.branchId ? branchNameById.get(item.branchId) ?? item.branchId : "—"}</td>
                       <td>
@@ -122,27 +122,29 @@ export function UsersPage() {
                       </td>
                       {canWrite ? (
                         <td className="row__actions">
-                          <button type="button" onClick={() => setEditing(item)}>
-                            Editar
-                          </button>
-                          {isSelf ? (
-                            <span className="state__hint">Tu propia cuenta</span>
-                          ) : (
-                            <>
-                              {item.active ? (
-                                <button type="button" onClick={() => setDeactivating(item)}>
-                                  Desactivar
+                          <div className="row__actions-group">
+                            <button type="button" onClick={() => setEditing(item)}>
+                              Editar
+                            </button>
+                            {isSelf ? (
+                              <span className="state__hint">Tu propia cuenta</span>
+                            ) : (
+                              <>
+                                {item.active ? (
+                                  <button type="button" onClick={() => setDeactivating(item)}>
+                                    Desactivar
+                                  </button>
+                                ) : (
+                                  <button type="button" onClick={() => setActivating(item)}>
+                                    Activar
+                                  </button>
+                                )}
+                                <button type="button" className="button--danger" onClick={() => setDeleting(item)}>
+                                  Eliminar
                                 </button>
-                              ) : (
-                                <button type="button" onClick={() => setActivating(item)}>
-                                  Activar
-                                </button>
-                              )}
-                              <button type="button" className="button--danger" onClick={() => setDeleting(item)}>
-                                Eliminar
-                              </button>
-                            </>
-                          )}
+                              </>
+                            )}
+                          </div>
                         </td>
                       ) : null}
                     </tr>
