@@ -18,20 +18,33 @@ export function AppLayout() {
   return (
     <div className="app">
       <header className="app__header">
-        <Link to="/" className="app__brand">
-          Inventario Multi-Sucursal
-        </Link>
-        <button
-          type="button"
-          className="app__menu-toggle"
-          aria-expanded={menuOpen}
-          aria-controls="app-nav"
-          aria-label={menuOpen ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <span aria-hidden="true">☰</span>
-        </button>
-        <nav id="app-nav" aria-label="Navegación principal" data-open={menuOpen}>
+        <div className="app__header-top">
+          <Link to="/" className="app__brand">
+            <span className="app__brand-mark" aria-hidden="true">IM</span>
+            Inventario Multi-Sucursal
+          </Link>
+          <button
+            type="button"
+            className="app__menu-toggle"
+            aria-expanded={menuOpen}
+            aria-controls="app-nav"
+            aria-label={menuOpen ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true">☰</span>
+          </button>
+          <div className="app__session">
+            {user ? (
+              <span>
+                {user.name} · {user.role}
+              </span>
+            ) : null}
+            <button type="button" onClick={signOut}>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+        <nav id="app-nav" className="app__nav-bar" aria-label="Navegación principal" data-open={menuOpen}>
           <ul>
             {items.map((item) => (
               <li key={item.path}>
@@ -42,16 +55,6 @@ export function AppLayout() {
             ))}
           </ul>
         </nav>
-        <div className="app__session">
-          {user ? (
-            <span>
-              {user.name} · {user.role}
-            </span>
-          ) : null}
-          <button type="button" onClick={signOut}>
-            Cerrar sesión
-          </button>
-        </div>
       </header>
       <main className="app__content">
         <Outlet />

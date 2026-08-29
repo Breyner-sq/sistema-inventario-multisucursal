@@ -90,20 +90,32 @@ h2 {
   letter-spacing: -0.01em;
 }
 
+/*
+ * Cabecera en dos franjas (ajuste explícito de aspecto profesional y
+ * simetría): antes, identidad/sesión y el menú de módulos competían por el
+ * mismo renglón y se envolvían de forma impredecible en cuanto no cabían
+ * (la sesión terminaba flotando arriba a la derecha, desalineada del menú
+ * que caía debajo) — un patrón de dos franjas ya común en paneles de
+ * administración separa con claridad "quién soy / dónde estoy" (franja
+ * superior) de "a qué módulo voy" (franja de navegación), cada una con su
+ * propio eje de simetría en vez de competir por el mismo espacio.
+ */
 .app__header {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  padding: 0.85rem 1.5rem;
   /* Material translúcido: el contenido se desplaza por debajo (sección 12). */
   background: var(--surface-translucent);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.app__header-top {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.7rem 1.5rem;
 }
 
 /*
@@ -119,38 +131,83 @@ a {
 }
 a:hover { text-decoration: underline; }
 
-.app__brand { font-weight: 600; text-decoration: none; color: inherit; margin-right: 0.5rem; }
-
-/*
- * Menú de módulos como grupo de "pills" (ajuste explícito de atractivo y
- * simetría): antes cada módulo era solo texto suelto separado por un
- * `gap`, sin ninguna superficie propia — sin zona de click visible y sin
- * distinguirse del texto corrido de la página. El mismo padding vertical/
- * horizontal en los 12 ítems (activo o no) los vuelve simétricos entre sí
- * sin importar el largo del texto ("Inicio" vs. "Transferencias"): misma
- * altura y forma, solo cambia el ancho según el contenido.
- */
-.app__header nav ul {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.15rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.app__header nav a {
+.app__brand {
   display: inline-flex;
   align-items: center;
-  padding: 0.4rem 0.75rem;
+  gap: 0.6rem;
+  font-weight: 600;
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Isotipo mínimo (dos iniciales en un cuadro de acento): le da a la marca un
+ * ancla visual propia en vez de ser solo texto corrido, sin necesitar un
+ * archivo de imagen ni una librería de iconos nueva (ADR-010). */
+.app__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/*
+ * Franja de navegación propia, separada de la identidad/sesión (ajuste
+ * explícito de aspecto profesional y simetría): un fondo apenas distinguible
+ * y un borde superior tenue le dan al menú de módulos su propia "banda"
+ * visual, y `justify-content: center` reparte el espacio sobrante en partes
+ * iguales a ambos lados del grupo de módulos en vez de dejarlo pegado a la
+ * izquierda con un vacío asimétrico a la derecha.
+ */
+.app__nav-bar {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.015);
+}
+.app__nav-bar ul {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 1.5rem;
+}
+/*
+ * Mismo padding vertical/horizontal en los once ítems (activo o no) los
+ * vuelve simétricos entre sí sin importar el largo del texto ("Alertas" vs.
+ * "Transferencias"): misma altura y forma, solo cambia el ancho según el
+ * contenido.
+ */
+.app__nav-bar a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.42rem 0.9rem;
   border-radius: var(--radius-pill);
   text-decoration: none;
   color: var(--muted);
-  font-size: 0.92rem;
-  transition: color var(--duration-fast) var(--ease-spring), background var(--duration-fast) ease;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-spring), background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
-.app__header nav a:hover { color: var(--text); background: rgba(0, 0, 0, 0.05); }
-.app__header nav a[aria-current="page"] { color: var(--accent); font-weight: 600; background: rgba(0, 113, 227, 0.1); }
+.app__nav-bar a:hover { color: var(--text); background: rgba(0, 0, 0, 0.05); }
+/* Pastilla rellena de acento (en vez del tinte tenue anterior) para que el
+ * módulo activo se lea de inmediato como el único estado "seleccionado",
+ * con el mismo nivel de contraste que un botón primario del resto de la app. */
+.app__nav-bar a[aria-current="page"] {
+  color: #fff;
+  font-weight: 600;
+  background: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
 .app__session { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
 .app__content { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
 
@@ -169,23 +226,24 @@ a:hover { text-decoration: underline; }
 }
 
 /*
- * Responsive: por debajo de este ancho, la barra de doce ítems ya no cabe en
+ * Responsive: por debajo de este ancho, la barra de once ítems ya no cabe en
  * una fila (ni siquiera envolviendo, sección de diseño móvil pedida
  * explícitamente) — el menú pasa a un panel colapsable que se abre con el
  * botón ☰, en vez de forzar un header de varias líneas siempre visible.
  */
 @media (max-width: 720px) {
-  .app__header { padding: 0.75rem 1rem; gap: 0.75rem; }
-  .app__brand { font-size: 0.95rem; }
+  .app__header-top { padding: 0.75rem 1rem; gap: 0.75rem; }
+  .app__brand { font-size: 0.92rem; }
+  .app__brand-mark { width: 1.65rem; height: 1.65rem; }
   .app__menu-toggle { display: inline-flex; }
-  .app__header nav {
-    order: 3;
-    flex-basis: 100%;
+  .app__nav-bar {
     display: none;
+    background: none;
+    border-top: none;
   }
-  .app__header nav[data-open="true"] { display: block; }
-  .app__header nav ul { flex-direction: column; align-items: stretch; gap: 0.1rem; padding-top: 0.35rem; }
-  .app__header nav a { width: 100%; padding: 0.6rem 0.75rem; }
+  .app__nav-bar[data-open="true"] { display: block; }
+  .app__nav-bar ul { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.1rem; padding: 0.35rem 1rem 0.6rem; }
+  .app__nav-bar a { width: 100%; padding: 0.6rem 0.75rem; }
   .app__session { margin-left: auto; font-size: 0.85rem; }
   .app__session span { display: none; }
 
