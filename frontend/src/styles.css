@@ -354,6 +354,18 @@ tbody tr:last-child td { border-bottom: none; }
 .th-sort { background: none; border: none; padding: 0; font: inherit; font-weight: inherit; color: inherit; cursor: pointer; }
 .th-sort:hover { text-decoration: underline; }
 
+/*
+ * Ajuste explícito de simetría: en Logística, "Resumen" (9 columnas) y "Por
+ * ruta" (11 columnas) viven una debajo de la otra y deberían verse parejas,
+ * pero con `table-layout: auto` (por defecto) una tabla puede crecer más
+ * allá de su `width: 100%` cuando el contenido lo exige — con más columnas y
+ * texto más largo (nombres de ruta, clasificación), "Por ruta" terminaba
+ * ~80px más ancha que "Resumen" y que el resto de la página (medido con
+ * `getBoundingClientRect`: 992px contra 912px). `table-layout: fixed` fuerza
+ * a respetar ese 100% de forma estricta en vez de desbordarlo.
+ */
+.table-fixed { table-layout: fixed; }
+
 .page__header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
 .page__header h1 { margin-right: auto; }
 .page__actions { display: flex; align-items: center; gap: 1rem; }

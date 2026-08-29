@@ -113,7 +113,7 @@ export function LogisticsCompliancePage() {
         {(report) => (
           <>
             <h2>Resumen</h2>
-            <table>
+            <table className="table-fixed">
               <thead>
                 <tr>
                   <th scope="col">Despachadas</th>
@@ -138,7 +138,23 @@ export function LogisticsCompliancePage() {
             {report.byRoute.length === 0 ? (
               <p className="state__hint">No hay transferencias despachadas que coincidan con los filtros.</p>
             ) : (
-              <table>
+              <table className="table-fixed">
+                {/* `table-layout: fixed` (para igualar el largo con "Resumen") reparte el ancho
+                    entre columnas sin mirar el contenido — sin este `<colgroup>`, "Ruta"/
+                    "Clasificación" (texto) quedarían tan angostas como "Tardías" (un dígito). */}
+                <colgroup>
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "11%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "9%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "8%" }} />
+                  <col style={{ width: "12%" }} />
+                  <col style={{ width: "8%" }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th scope="col">Ruta</th>
