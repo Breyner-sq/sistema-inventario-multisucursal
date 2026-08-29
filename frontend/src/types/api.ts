@@ -98,6 +98,14 @@ export interface CreateUserRequest {
   branchId?: number | null;
 }
 
+/** BR-058: edición de nombre/correo/rol/sucursal — sin contraseña, eso sigue siendo un flujo aparte. */
+export interface UpdateUserRequest {
+  name: string;
+  email: string;
+  role: Role;
+  branchId?: number | null;
+}
+
 export interface DeactivateUserRequest {
   reason: string;
 }
@@ -134,6 +142,10 @@ export interface CreateProductRequest {
 export interface UpdateProductRequest {
   name: string;
   description?: string | null;
+  /** BR-057: editable después de creado, a diferencia del SKU y la unidad base. */
+  unitPrice: number;
+  /** BR-059: editable después de creado, a diferencia del SKU y la unidad base. */
+  minimumStock: number;
 }
 
 export interface UnitOfMeasure {

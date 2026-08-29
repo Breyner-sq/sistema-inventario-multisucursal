@@ -27,10 +27,13 @@ import java.math.BigDecimal;
  *
  * <p>{@code sku} es la clave de negocio, inmutable después de creado —
  * igual que {@code Branch.code} (docs/API_DESIGN.md, sección 7.4: el PATCH
- * actualiza "nombre/descripción", no el SKU). {@code minimumStock} tampoco
- * se edita después de creado (mismo criterio): es un valor de arranque, no
- * un control operativo continuo — ese sigue siendo `Inventory.minimum_stock`
- * por sucursal.
+ * actualiza "nombre/descripción", no el SKU). {@code minimumStock} sí se
+ * edita después de creado (BR-059, por instrucción explícita, revierte la
+ * inmutabilidad original de BR-048): sigue siendo solo el valor de siembra
+ * para la primera vez que cada sucursal registra movimiento de este
+ * producto — editarlo no toca ninguna fila de {@code Inventory} ya
+ * materializada, solo cambia qué valor recibirán las sucursales que aún no
+ * lo tengan.
  */
 @Entity
 @Table(name = "product")
@@ -75,9 +78,10 @@ public class Product extends Auditable {
         this.minimumStock = minimumStock;
     }
 
-    public void updateDetails(String name, String description) {
+    public void updateDetails(String name, String description, BigDecimal minimumStock) {
         this.name = name;
         this.description = description;
+        this.minimumStock = minimumStock;
     }
 
     public void activate() {

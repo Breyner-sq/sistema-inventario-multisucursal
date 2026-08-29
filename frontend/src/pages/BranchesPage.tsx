@@ -118,7 +118,7 @@ export function BranchesPage() {
                       <button type="button" onClick={() => setToggling(branch)}>
                         {branch.active ? "Desactivar" : "Activar"}
                       </button>
-                      <button type="button" onClick={() => setDeleting(branch)}>
+                      <button type="button" className="button--danger" onClick={() => setDeleting(branch)}>
                         Eliminar
                       </button>
                     </td>

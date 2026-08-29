@@ -14,13 +14,23 @@ function supplierRoutes(overrides: (url: string, init?: RequestInit) => Response
 }
 
 describe("Alta de proveedor", () => {
-  it("cualquier rol autenticado ve el botón de nuevo proveedor (BR-049)", async () => {
-    seedSession("OPERATOR");
+  it("MANAGER y ADMIN ven el botón de nuevo proveedor; OPERATOR solo lectura (BR-058)", async () => {
+    seedSession("MANAGER");
     mockFetch(supplierRoutes());
-    renderApp("/proveedores");
+    const { unmount } = renderApp("/proveedores");
 
     expect(await screen.findByText("Distribuidora Andina")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /nuevo proveedor/i })).toBeInTheDocument();
+    unmount();
+
+    sessionStorage.clear();
+    seedSession("OPERATOR");
+    renderApp("/proveedores");
+
+    expect(await screen.findByText("Distribuidora Andina")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /nuevo proveedor/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^editar$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /acciones/i })).not.toBeInTheDocument();
   });
 
   it("no envía nada y señala los campos obligatorios cuando el formulario es inválido", async () => {
@@ -37,7 +47,7 @@ describe("Alta de proveedor", () => {
   });
 
   it("envía el alta válida y vuelve a consultar el listado", async () => {
-    seedSession("OPERATOR");
+    seedSession("MANAGER");
     let created = false;
     const fetchSpy = mockFetch(
       supplierRoutes((url, init) => {
@@ -125,7 +135,7 @@ describe("Gestión de proveedor (editar, activar/desactivar, eliminar)", () => {
   });
 
   it("desactiva un proveedor tras confirmar en el diálogo", async () => {
-    seedSession("OPERATOR");
+    seedSession("MANAGER");
     let active = true;
     const fetchSpy = mockFetch(
       supplierRoutes((url, init) => {
@@ -177,6 +187,17 @@ describe("Gestión de proveedor (editar, activar/desactivar, eliminar)", () => {
     expect(del).toBeDefined();
     await screen.findByText("Proveedor Norte");
     expect(screen.queryByText("Distribuidora Andina")).not.toBeInTheDocument();
+  });
+
+  it("MANAGER ve editar/desactivar pero no eliminar (BR-058: eliminar es exclusivo de ADMIN)", async () => {
+    seedSession("MANAGER");
+    mockFetch(supplierRoutes());
+    renderApp("/proveedores");
+
+    const row = (await screen.findByText("Distribuidora Andina")).closest("tr")!;
+    expect(within(row).getByRole("button", { name: /editar/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /desactivar/i })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /eliminar/i })).not.toBeInTheDocument();
   });
 
   it("muestra el conflicto del backend sin ocultarlo cuando el proveedor tiene órdenes de compra asociadas", async () => {

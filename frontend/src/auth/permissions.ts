@@ -90,14 +90,14 @@ export const canBranches = {
 };
 
 /**
- * Proveedores: CRUD completo (incluida la eliminación) abierto a cualquier
- * rol autenticado (BR-049) — a diferencia del resto de catálogos, no hay
- * ningún subconjunto de roles con más capacidades que otro. Se mantiene esta
- * función, en vez de omitir el chequeo en la pantalla, solo para seguir el
- * mismo idioma que el resto de módulos (`canX.write`).
+ * Proveedores (BR-058, reduce el alcance de BR-049 por instrucción
+ * explícita): `OPERATOR` pasa a solo lectura; crear/editar/activar/desactivar
+ * es `MANAGER`+`ADMIN`; eliminar (real, no reversible) queda exclusivo de
+ * `ADMIN` — ni siquiera `MANAGER`.
  */
 export const canSuppliers = {
-  write: (_role: Role | undefined): boolean => true,
+  write: (role: Role | undefined): boolean => role === "MANAGER" || role === "ADMIN",
+  delete: (role: Role | undefined): boolean => role === "ADMIN",
 };
 
 export const canPurchases = {

@@ -1,5 +1,5 @@
 import { apiRequest } from "../httpClient";
-import type { CreateUserRequest, Page, RoleInfo, User } from "../../types/api";
+import type { CreateUserRequest, Page, RoleInfo, UpdateUserRequest, User } from "../../types/api";
 
 /** docs/API_DESIGN.md, sección 7.2. Módulo de lectura y escritura exclusivo de ADMIN (UC-14). */
 
@@ -11,6 +11,11 @@ export function listUsers(
 
 export function createUser(body: CreateUserRequest): Promise<User> {
   return apiRequest<User>("/users", { method: "POST", body });
+}
+
+/** BR-058: edita nombre/correo/rol/sucursal — la contraseña sigue siendo un flujo aparte. */
+export function updateUser(id: string, body: UpdateUserRequest): Promise<User> {
+  return apiRequest<User>(`/users/${id}`, { method: "PATCH", body });
 }
 
 export function activateUser(id: string): Promise<User> {

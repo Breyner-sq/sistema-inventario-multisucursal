@@ -67,11 +67,9 @@ public class ProductService {
         // último recurso (BR-030) si una venta no especifica lista, así que
         // una venta nueva resuelve este precio automáticamente sin ninguna
         // configuración adicional del lado de listas de precios.
-        PriceList defaultPriceList = priceListRepository.findFirstByBranchIdIsNullAndActiveTrue()
-                .orElseGet(() -> priceListRepository.save(new PriceList(DEFAULT_PRICE_LIST_NAME, null)));
-        Price price = priceRepository.save(new Price(defaultPriceList.getId(), product.getId(), request.unitPrice()));
+        BigDecimal salePrice = setDefaultListPrice(product.getId(), request.unitPrice());
 
-        return ProductResponse.from(product, price.getUnitPrice());
+        return ProductResponse.from(product, salePrice);
     }
 
     public ProductResponse getById(Long id) {
@@ -102,8 +100,28 @@ public class ProductService {
     @Transactional
     public ProductResponse update(Long id, UpdateProductRequest request) {
         Product product = findOrThrow(id);
-        product.updateDetails(request.name(), request.description());
-        return ProductResponse.from(product, resolveSalePrices(List.of(product)).get(product.getId()));
+        product.updateDetails(request.name(), request.description(), request.minimumStock());
+        // BR-057: a diferencia de nombre/descripción, el precio no se sobrescribe
+        // sobre la fila vigente — se cierra y se inserta una nueva, mismo
+        // versionado que PriceListService.setPrice (BR-019).
+        BigDecimal salePrice = setDefaultListPrice(product.getId(), request.unitPrice());
+        return ProductResponse.from(product, salePrice);
+    }
+
+    /** BR-051/BR-057: fija el precio de venta como el nuevo {@code Price} vigente en la lista de precios global por defecto, cerrando el anterior si existía. */
+    private BigDecimal setDefaultListPrice(Long productId, BigDecimal unitPrice) {
+        PriceList defaultPriceList = priceListRepository.findFirstByBranchIdIsNullAndActiveTrue()
+                .orElseGet(() -> priceListRepository.save(new PriceList(DEFAULT_PRICE_LIST_NAME, null)));
+        priceRepository.findByPriceListIdAndProductIdAndValidToIsNull(defaultPriceList.getId(), productId)
+                .ifPresent(current -> {
+                    current.close();
+                    // saveAndFlush: el UPDATE que cierra el precio anterior debe llegar a la base
+                    // antes del INSERT del nuevo precio, o el índice único uq_price_list_product_current
+                    // (price_list_id, product_id) WHERE valid_to IS NULL choca porque Hibernate agrupa
+                    // los INSERT antes que los UPDATE dentro de un mismo flush.
+                    priceRepository.saveAndFlush(current);
+                });
+        return priceRepository.save(new Price(defaultPriceList.getId(), productId, unitPrice)).getUnitPrice();
     }
 
     @Transactional

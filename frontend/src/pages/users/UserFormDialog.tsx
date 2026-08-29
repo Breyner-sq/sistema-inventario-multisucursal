@@ -1,40 +1,60 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { createUser } from "../../api/endpoints/users";
+import { createUser, updateUser } from "../../api/endpoints/users";
 import { queryPrefixes } from "../../api/queryClient";
 import { Field, FormErrorMessage, SelectField } from "../../components/form/Field";
 import { toFormErrors } from "../../components/form/formErrors";
 import { Modal } from "../../components/ui/Modal";
-import type { Branch, Role, RoleInfo } from "../../types/api";
+import type { Branch, Role, RoleInfo, User } from "../../types/api";
 
 /**
- * Alta de usuario (UC-14): asigna un rol y, salvo para `ADMIN` (alcance
- * global, sin sucursal), la sucursal a la que queda restringido. El backend
- * vuelve a validar esa consistencia (`ADMIN_SIN_SUCURSAL`/`SUCURSAL_REQUERIDA`,
+ * Alta y edición de usuario en un mismo diálogo (UC-14; BR-058): ambas
+ * asignan un rol y, salvo para `ADMIN` (alcance global, sin sucursal), la
+ * sucursal a la que queda restringido. El backend vuelve a validar esa
+ * consistencia (`ADMIN_SIN_SUCURSAL`/`SUCURSAL_REQUERIDA`,
  * `UserService.validateRoleBranchConsistency`) — aquí solo se evita el envío
- * obviamente incompleto, nunca se decide la regla.
+ * obviamente incompleto, nunca se decide la regla. La contraseña solo se pide
+ * al crear: cambiarla sigue siendo un flujo aparte, fuera de este diálogo.
  */
-export function UserFormDialog({ roles, branches, onClose }: { roles: RoleInfo[]; branches: Branch[]; onClose: () => void }) {
+export function UserFormDialog({
+  user,
+  roles,
+  branches,
+  onClose,
+}: {
+  user?: User;
+  roles: RoleInfo[];
+  branches: Branch[];
+  onClose: () => void;
+}) {
+  const isEdit = user !== undefined;
   const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(user?.name ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role | "">("");
-  const [branchId, setBranchId] = useState("");
+  const [role, setRole] = useState<Role | "">(user?.role ?? "");
+  const [branchId, setBranchId] = useState(user?.branchId ?? "");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
 
   const requiresBranch = role !== "" && role !== "ADMIN";
 
   const mutation = useMutation({
     mutationFn: () =>
-      createUser({
-        name: name.trim(),
-        email: email.trim(),
-        password,
-        role: role as Role,
-        branchId: requiresBranch ? Number(branchId) : null,
-      }),
+      isEdit
+        ? updateUser(user.id, {
+            name: name.trim(),
+            email: email.trim(),
+            role: role as Role,
+            branchId: requiresBranch ? Number(branchId) : null,
+          })
+        : createUser({
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            role: role as Role,
+            branchId: requiresBranch ? Number(branchId) : null,
+          }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryPrefixes.users });
       onClose();
@@ -51,7 +71,7 @@ export function UserFormDialog({ roles, branches, onClose }: { roles: RoleInfo[]
     const errors: Record<string, string> = {};
     if (!name.trim()) errors.name = "El nombre es obligatorio.";
     if (!email.trim()) errors.email = "El correo es obligatorio.";
-    if (password.length < 8) errors.password = "La contraseña debe tener al menos 8 caracteres.";
+    if (!isEdit && password.length < 8) errors.password = "La contraseña debe tener al menos 8 caracteres.";
     if (!role) errors.role = "Selecciona un rol.";
     if (requiresBranch && !branchId) errors.branchId = "Selecciona la sucursal.";
     setLocalErrors(errors);
@@ -60,7 +80,7 @@ export function UserFormDialog({ roles, branches, onClose }: { roles: RoleInfo[]
   }
 
   return (
-    <Modal title="Nuevo usuario" onClose={onClose}>
+    <Modal title={isEdit ? `Editar ${user.name}` : "Nuevo usuario"} onClose={onClose}>
       <form onSubmit={handleSubmit} noValidate>
         <Field id="user-name" label="Nombre" value={name} maxLength={150} onChange={(event) => setName(event.target.value)} error={errorFor("name")} />
 
@@ -74,15 +94,17 @@ export function UserFormDialog({ roles, branches, onClose }: { roles: RoleInfo[]
           error={errorFor("email")}
         />
 
-        <Field
-          id="user-password"
-          label="Contraseña"
-          type="password"
-          value={password}
-          maxLength={100}
-          onChange={(event) => setPassword(event.target.value)}
-          error={errorFor("password")}
-        />
+        {!isEdit ? (
+          <Field
+            id="user-password"
+            label="Contraseña"
+            type="password"
+            value={password}
+            maxLength={100}
+            onChange={(event) => setPassword(event.target.value)}
+            error={errorFor("password")}
+          />
+        ) : null}
 
         <SelectField
           id="user-role"

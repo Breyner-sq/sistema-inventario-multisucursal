@@ -69,7 +69,10 @@ public class UserService {
         if (request.branchId() != null) {
             requireActiveBranch(request.branchId());
         }
-        user.updateProfile(request.name(), request.role(), request.branchId());
+        if (userRepository.existsByEmailAndIdNot(request.email(), id)) {
+            throw new ResourceConflictException("EMAIL_YA_EXISTE", "Ya existe un usuario con ese correo.");
+        }
+        user.updateProfile(request.name(), request.email(), request.role(), request.branchId());
         return UserResponse.from(user);
     }
 

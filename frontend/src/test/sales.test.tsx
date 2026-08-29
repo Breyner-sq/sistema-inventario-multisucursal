@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiErrorResponse, jsonResponse, mockFetch, renderApp, seedSession, selectOption } from "./harness";
-import { PRODUCTS, catalogResponse, page, sale } from "./catalog";
+import { PRODUCTS, catalogResponse, inventoryRow, page, sale } from "./catalog";
 
 function saleRoutes(overrides: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined = () => undefined) {
   return (url: string, init?: RequestInit) => {
@@ -11,6 +11,7 @@ function saleRoutes(overrides: (url: string, init?: RequestInit) => Response | P
     const catalog = catalogResponse(url);
     if (catalog) return catalog;
     if (url.includes("/products")) return jsonResponse(200, page(PRODUCTS));
+    if (url.includes("/inventory")) return jsonResponse(200, page([inventoryRow({ productId: "10", branchId: "1", quantityOnHand: 42 })]));
     if (/\/sales\/\d+$/.test(url)) return jsonResponse(200, sale());
     if (url.includes("/sales")) return jsonResponse(200, page([sale()]));
     return jsonResponse(200, page([]));
@@ -73,6 +74,16 @@ describe("Nueva venta", () => {
 
     const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
     expect(await within(row).findByText("50")).toBeInTheDocument();
+  });
+
+  it("muestra el stock del producto seleccionado en la sucursal seleccionada", async () => {
+    seedSession("OPERATOR");
+    mockFetch(saleRoutes());
+    renderApp("/ventas/nueva");
+
+    const row = screen.getByLabelText(/producto de la línea 1/i).closest("tr")!;
+    await selectOption(/producto de la línea 1/i, "10");
+    expect(await within(row).findByText("42")).toBeInTheDocument();
   });
 
   it("calcula el total de línea estimado con descuento", async () => {

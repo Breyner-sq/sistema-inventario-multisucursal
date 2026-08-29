@@ -15,16 +15,17 @@ const PAGE_SIZE = 20;
 type StatusFilter = "activos" | "inactivos" | "todos";
 
 /**
- * CRUD completo de proveedores, abierto a cualquier rol autenticado (BR-049)
- * — por eso, a diferencia de `BranchesPage`/`ProductsPage`, ninguna acción
- * queda oculta según el rol. Eliminar es una acción real (no reversible): el
- * backend la rechaza con `PROVEEDOR_CON_DATOS_ASOCIADOS` si el proveedor
- * tiene órdenes de compra asociadas, mensaje que se muestra tal cual en vez
- * de reinterpretarse aquí.
+ * Proveedores (BR-058): lectura abierta a cualquier rol; crear/editar/
+ * activar/desactivar es `MANAGER`+`ADMIN` (`OPERATOR` solo lectura);
+ * eliminar (real, no reversible) es exclusivo de `ADMIN`. El backend la
+ * rechaza además con `PROVEEDOR_CON_DATOS_ASOCIADOS` si el proveedor tiene
+ * órdenes de compra asociadas, mensaje que se muestra tal cual en vez de
+ * reinterpretarse aquí.
  */
 export function SuppliersPage() {
   const { user } = useAuth();
   const canWrite = canSuppliers.write(user?.role);
+  const canDelete = canSuppliers.delete(user?.role);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
@@ -124,7 +125,7 @@ export function SuppliersPage() {
                   <th scope="col">Teléfono</th>
                   <th scope="col">Correo</th>
                   <th scope="col">Estado</th>
-                  {canWrite ? <th scope="col">Acciones</th> : null}
+                  {canWrite || canDelete ? <th scope="col">Acciones</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -140,17 +141,23 @@ export function SuppliersPage() {
                         {supplier.active ? "Activo" : "Inactivo"}
                       </span>
                     </td>
-                    {canWrite ? (
+                    {canWrite || canDelete ? (
                       <td className="row__actions">
-                        <button type="button" onClick={() => setEditing(supplier)}>
-                          Editar
-                        </button>
-                        <button type="button" onClick={() => setToggling(supplier)}>
-                          {supplier.active ? "Desactivar" : "Activar"}
-                        </button>
-                        <button type="button" onClick={() => setDeleting(supplier)}>
-                          Eliminar
-                        </button>
+                        {canWrite ? (
+                          <>
+                            <button type="button" onClick={() => setEditing(supplier)}>
+                              Editar
+                            </button>
+                            <button type="button" onClick={() => setToggling(supplier)}>
+                              {supplier.active ? "Desactivar" : "Activar"}
+                            </button>
+                          </>
+                        ) : null}
+                        {canDelete ? (
+                          <button type="button" className="button--danger" onClick={() => setDeleting(supplier)}>
+                            Eliminar
+                          </button>
+                        ) : null}
                       </td>
                     ) : null}
                   </tr>

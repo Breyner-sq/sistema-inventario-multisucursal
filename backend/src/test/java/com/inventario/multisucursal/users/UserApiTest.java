@@ -117,12 +117,56 @@ class UserApiTest {
 
         ResponseEntity<UserResponse> response = patch(
                 "/api/v1/users/" + userId,
-                new UpdateUserRequest("Operador A", RoleCode.OPERATOR, branchB.getId()),
+                new UpdateUserRequest("Operador A", "operator@test.local", RoleCode.OPERATOR, branchB.getId()),
                 adminToken,
                 UserResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody().branchId()).isEqualTo(String.valueOf(branchB.getId()));
+    }
+
+    // ---- Edición de correo (BR-058) ----
+
+    @Test
+    void adminCanUpdateAUsersEmail() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<UserResponse> response = patch(
+                "/api/v1/users/" + userId,
+                new UpdateUserRequest("Operador A", "operador.nuevo@test.local", RoleCode.OPERATOR, branchA.getId()),
+                adminToken,
+                UserResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().email()).isEqualTo("operador.nuevo@test.local");
+    }
+
+    @Test
+    void updatingToAnEmailAlreadyUsedByAnotherUserReturns409() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<String> response = patch(
+                "/api/v1/users/" + userId,
+                new UpdateUserRequest("Operador A", "admin@test.local", RoleCode.OPERATOR, branchA.getId()),
+                adminToken,
+                String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getBody()).contains("\"code\":\"EMAIL_YA_EXISTE\"");
+    }
+
+    @Test
+    void keepingTheSameEmailOnUpdateIsNotTreatedAsADuplicate() {
+        Long userId = userRepository.findByEmail("operator@test.local").orElseThrow().getId();
+
+        ResponseEntity<UserResponse> response = patch(
+                "/api/v1/users/" + userId,
+                new UpdateUserRequest("Operador Renombrado", "operator@test.local", RoleCode.OPERATOR, branchA.getId()),
+                adminToken,
+                UserResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().name()).isEqualTo("Operador Renombrado");
     }
 
     // ---- Duplicados ----
@@ -283,7 +327,7 @@ class UserApiTest {
 
         assertThat(getWithToken("/api/v1/users/" + missingId, adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(patch("/api/v1/users/" + missingId, new UpdateUserRequest("X", RoleCode.OPERATOR, branchA.getId()), adminToken, String.class)
+        assertThat(patch("/api/v1/users/" + missingId, new UpdateUserRequest("X", "x@test.local", RoleCode.OPERATOR, branchA.getId()), adminToken, String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(post("/api/v1/users/" + missingId + "/deactivate", new DeactivateUserRequest("Motivo"), adminToken, String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);

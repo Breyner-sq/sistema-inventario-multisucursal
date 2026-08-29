@@ -213,6 +213,84 @@ describe("Pantalla de productos", () => {
     });
   });
 
+  describe("Edición de producto (BR-057)", () => {
+    it("permite editar el precio de venta además del nombre y la descripción", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(productRoutes());
+      renderApp("/productos");
+
+      const row = (await screen.findByText("SKU-001")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      const priceField = within(dialog).getByLabelText(/precio de venta/i);
+      expect(priceField).toHaveValue("50");
+      await userEvent.clear(priceField);
+      await userEvent.type(priceField, "75");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      const patch = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+      expect(patch).toBeDefined();
+      expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({ unitPrice: 75 });
+    });
+
+    it("exige un precio de venta mayor que cero también al editar", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(productRoutes());
+      renderApp("/productos");
+
+      const row = (await screen.findByText("SKU-001")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      await userEvent.clear(within(dialog).getByLabelText(/precio de venta/i));
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      expect(await screen.findByText(/indica el precio de venta/i)).toBeInTheDocument();
+      expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toBe(false);
+    });
+  });
+
+  describe("Edición de stock mínimo (BR-059)", () => {
+    it("permite editar el stock mínimo, pre-cargado con el valor actual", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(productRoutes());
+      renderApp("/productos");
+
+      const row = (await screen.findByText("SKU-001")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      const minStockField = within(dialog).getByLabelText(/stock mínimo/i);
+      expect(minStockField).toHaveValue("10");
+      await userEvent.clear(minStockField);
+      await userEvent.type(minStockField, "20");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      const patch = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+      expect(patch).toBeDefined();
+      expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({ minimumStock: 20 });
+    });
+
+    it("no permite un stock mínimo negativo al editar", async () => {
+      seedSession("OPERATOR");
+      const fetchSpy = mockFetch(productRoutes());
+      renderApp("/productos");
+
+      const row = (await screen.findByText("SKU-001")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      const minStockField = within(dialog).getByLabelText(/stock mínimo/i);
+      await userEvent.clear(minStockField);
+      await userEvent.type(minStockField, "-5");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      expect(await screen.findByText(/indica el stock mínimo/i)).toBeInTheDocument();
+      expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toBe(false);
+    });
+  });
+
   describe("Edición de unidades de medida (BR-050)", () => {
     it("ADMIN puede editar el nombre de una unidad, el código permanece fijo", async () => {
       seedSession("ADMIN");

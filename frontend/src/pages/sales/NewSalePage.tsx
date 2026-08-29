@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
+import { listInventory } from "../../api/endpoints/inventory";
 import { listProducts } from "../../api/endpoints/products";
 import { createSale } from "../../api/endpoints/sales";
 import { queryKeys, queryPrefixes } from "../../api/queryClient";
@@ -47,6 +48,16 @@ export function NewSalePage() {
 
   const priceListsQuery = useApplicablePriceLists(branchId);
   const pricesQuery = usePrices(priceListId);
+
+  // Stock de la sucursal elegida, para mostrarlo junto a cada línea antes de
+  // confirmar — el backend vuelve a validar disponibilidad al confirmar
+  // (BR-022); esto es solo una previsualización, igual que el precio.
+  const inventoryQuery = useQuery({
+    queryKey: queryKeys.inventory({ branchId, size: 200 }),
+    queryFn: () => listInventory({ branchId, size: 200 }),
+    enabled: branchId !== "",
+  });
+  const stockByProductId = new Map((inventoryQuery.data?.content ?? []).map((row) => [row.productId, row.quantityOnHand]));
 
   useEffect(() => {
     setPriceListId(priceListsQuery.defaultId);
@@ -168,6 +179,7 @@ export function NewSalePage() {
             <thead>
               <tr>
                 <th scope="col">Producto</th>
+                <th scope="col">Stock en sucursal</th>
                 <th scope="col">Unidad</th>
                 <th scope="col">Cantidad</th>
                 <th scope="col">Precio</th>
@@ -184,6 +196,7 @@ export function NewSalePage() {
                   index={index}
                   products={products}
                   unitPrice={pricesQuery.byProductId.get(line.productId)}
+                  stockOnHand={stockByProductId.get(line.productId)}
                   onChange={updateLine}
                   onRemove={removeLine}
                   canRemove={lines.length > 1}

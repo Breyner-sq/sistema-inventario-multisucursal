@@ -29,13 +29,11 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * RF-012; BR-049: proveedores con CRUD completo abierto a cualquier rol
- * autenticado (a diferencia de {@code products}/{@code branches}, no hay
- * ningún subconjunto de roles con más capacidades que otro, ni restricción
- * por sucursal). Cubre creación válida, identificación fiscal duplicada,
- * lectura, edición sin alterar la identificación fiscal, activar/desactivar,
- * eliminación real sin datos asociados, recurso inexistente y que los tres
- * roles pueden ejercer cada escritura.
+ * RF-012; BR-058 (reduce el alcance de BR-049, por instrucción explícita):
+ * lectura abierta a cualquier rol; crear/editar/activar/desactivar es
+ * {@code MANAGER}+{@code ADMIN} ({@code OPERATOR} pasa a solo lectura);
+ * eliminar (real, no reversible) queda exclusivo de {@code ADMIN} (ni
+ * siquiera {@code MANAGER}). Sin restricción por sucursal en ningún caso.
  *
  * <p>El caso "eliminar bloqueado por una orden de compra asociada" depende
  * íntegramente de la FK {@code ON DELETE RESTRICT} real de PostgreSQL —
@@ -104,11 +102,14 @@ class SupplierApiTest {
     }
 
     @Test
-    void managerAndOperatorCanAlsoCreateSupplier() {
+    void managerCanCreateSupplierButOperatorCannot() {
         assertThat(post("/api/v1/suppliers", Map.of("name", "Del gerente", "taxId", "TAX-MGR"), managerToken, SupplierResponse.class)
                 .getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(post("/api/v1/suppliers", Map.of("name", "Del operador", "taxId", "TAX-OPR"), operatorToken, SupplierResponse.class)
-                .getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        ResponseEntity<String> operatorResponse = post(
+                "/api/v1/suppliers", Map.of("name", "Del operador", "taxId", "TAX-OPR"), operatorToken, String.class);
+        assertThat(operatorResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(operatorResponse.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
     }
 
     @Test
@@ -131,7 +132,7 @@ class SupplierApiTest {
         assertThat(response.getBody()).contains("TAX-READ");
     }
 
-    // ---- Edición y activación/desactivación por cualquier rol ----
+    // ---- Edición y activación/desactivación: MANAGER + ADMIN, no OPERATOR ----
 
     @Test
     void updatingSupplierDoesNotChangeTaxId() {
@@ -148,30 +149,57 @@ class SupplierApiTest {
     }
 
     @Test
-    void supplierCanBeDeactivatedAndReactivatedByAnyRole() {
+    void operatorCannotUpdateOrDeactivateASupplier() {
+        ResponseEntity<SupplierResponse> created = post(
+                "/api/v1/suppliers", Map.of("name", "Solo lectura", "taxId", "TAX-RO"), adminToken, SupplierResponse.class);
+        String id = created.getBody().id();
+
+        ResponseEntity<String> updateResponse = patch("/api/v1/suppliers/" + id, Map.of("name", "Intento"), operatorToken, String.class);
+        assertThat(updateResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(updateResponse.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+
+        ResponseEntity<String> deactivateResponse = postAction("/api/v1/suppliers/" + id + "/deactivate", operatorToken, String.class);
+        assertThat(deactivateResponse.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void managerCanDeactivateAndReactivateASupplier() {
         ResponseEntity<SupplierResponse> created = post(
                 "/api/v1/suppliers", Map.of("name", "Proveedor Baja", "taxId", "TAX-BAJA"), adminToken, SupplierResponse.class);
         String id = created.getBody().id();
 
-        ResponseEntity<SupplierResponse> deactivated = postAction("/api/v1/suppliers/" + id + "/deactivate", operatorToken, SupplierResponse.class);
+        ResponseEntity<SupplierResponse> deactivated = postAction("/api/v1/suppliers/" + id + "/deactivate", managerToken, SupplierResponse.class);
         assertThat(deactivated.getBody().active()).isFalse();
 
         ResponseEntity<SupplierResponse> reactivated = postAction("/api/v1/suppliers/" + id + "/activate", managerToken, SupplierResponse.class);
         assertThat(reactivated.getBody().active()).isTrue();
     }
 
-    // ---- Eliminación real ----
+    // ---- Eliminación real: exclusiva de ADMIN ----
 
     @Test
-    void anyRoleCanDeleteSupplierWithNoAssociatedData() {
+    void adminCanDeleteSupplierWithNoAssociatedData() {
         ResponseEntity<SupplierResponse> created = post(
                 "/api/v1/suppliers", Map.of("name", "Sin datos", "taxId", "TAX-VACIO"), adminToken, SupplierResponse.class);
         Long id = Long.valueOf(created.getBody().id());
 
-        ResponseEntity<Void> response = delete("/api/v1/suppliers/" + id, operatorToken, Void.class);
+        ResponseEntity<Void> response = delete("/api/v1/suppliers/" + id, adminToken, Void.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(supplierRepository.findById(id)).isEmpty();
+    }
+
+    @Test
+    void managerCannotDeleteASupplier() {
+        ResponseEntity<SupplierResponse> created = post(
+                "/api/v1/suppliers", Map.of("name", "Protegido del gerente", "taxId", "TAX-MGR-DEL"), adminToken, SupplierResponse.class);
+        String id = created.getBody().id();
+
+        ResponseEntity<String> response = delete("/api/v1/suppliers/" + id, managerToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getBody()).contains("\"code\":\"ROL_NO_AUTORIZADO\"");
+        assertThat(supplierRepository.findById(Long.valueOf(id))).isPresent();
     }
 
     // ---- Recurso inexistente ----

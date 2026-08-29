@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.transfers.TransferApiTest
 -------------------------------------------------------------------------------
-Tests run: 32, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.40 s -- in com.inventario.multisucursal.transfers.TransferApiTest
+Tests run: 32, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 13.78 s -- in com.inventario.multisucursal.transfers.TransferApiTest

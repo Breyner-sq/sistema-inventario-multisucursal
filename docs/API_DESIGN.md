@@ -120,7 +120,7 @@ Convención de la tabla: **rol** con acceso; "propia sucursal" significa que el 
 | `inventory`, `inventory-movements` | cualquier rol autenticado, cualquier sucursal (RF-003) | — (solo vía `adjustments` u otros flujos) |
 | `inventory/adjustments` | — | `OPERATOR` (propia sucursal) + `ADMIN` |
 | `stock-alerts` | cualquier rol autenticado | — (generación automática) |
-| `suppliers` | cualquier rol autenticado | cualquier rol autenticado — BR-049, sin restricción de rol ni de sucursal, incluida la eliminación real (`DELETE`) |
+| `suppliers` | cualquier rol autenticado | `MANAGER`+`ADMIN` para crear/editar/activar/desactivar; `DELETE` exclusivo de `ADMIN` — BR-058 reduce el alcance de BR-049 (`OPERATOR` pasa a solo lectura), sin restricción por sucursal en ningún caso |
 | `purchase-orders`, `.../receipts` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` (cualquiera) | `OPERATOR`/`MANAGER` (propia sucursal) + `ADMIN` — `MANAGER` ampliado a las mismas capacidades que `ADMIN`/`OPERATOR` (crear, cancelar, recibir) por decisión explícita registrada en BR-047 |
 | `sales` | `MANAGER`/`OPERATOR` (propia sucursal), `ADMIN` | `OPERATOR` + `MANAGER` (propia sucursal) + `ADMIN` — ampliado por BR-053, incluye crear y devolver (`/returns`) |
 | `sales/{id}/void` | — | `MANAGER` (propia sucursal) + `ADMIN` **[Supuesto: anulación requiere un rol de supervisión, no el mismo Operador que la creó — condicionado a que `docs/DOMAIN_MODEL.md` decisión 9 apruebe el estado `VOIDED`]** |
@@ -158,7 +158,7 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | `GET` | `/users` | Lista paginada. Filtros: `branchId`, `role`, `active`. |
 | `POST` | `/users` | Crea usuario. |
 | `GET` | `/users/{id}` | Detalle. |
-| `PATCH` | `/users/{id}` | Actualiza nombre/rol/sucursal. |
+| `PATCH` | `/users/{id}` | Actualiza nombre/correo/rol/sucursal (BR-058 sumó el correo; la contraseña sigue fuera de este endpoint). |
 | `POST` | `/users/{id}/activate` \| `/deactivate` | Baja/alta lógica (BR-021). |
 | `GET` | `/roles` | Catálogo fijo de 3 roles, para poblar formularios. |
 
@@ -179,7 +179,7 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | `GET` | `/products` | Lista. Filtros: `search` (sku/nombre), `active`. |
 | `POST` | `/products` | Crea producto (incluye `baseUnitOfMeasureId`, `minimumStock` y `unitPrice` — BR-048, BR-051). |
 | `GET` | `/products/{id}` | Detalle. |
-| `PATCH` | `/products/{id}` | Actualiza nombre/descripción. |
+| `PATCH` | `/products/{id}` | Actualiza nombre/descripción/precio de venta/stock mínimo (`unitPrice` obligatorio — BR-057, cierra el precio vigente anterior y fija uno nuevo; `minimumStock` obligatorio — BR-059, solo cambia el valor de siembra para sucursales sin `Inventory` de este producto). |
 | `POST` | `/products/{id}/activate` \| `/deactivate` | Baja/alta lógica. |
 | `GET` | `/products/{id}/units` | Unidades alternativas y su factor de conversión (RF-011). |
 | `POST` | `/products/{id}/units` | Agrega una unidad alternativa. |
@@ -203,11 +203,11 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/suppliers` | Lista. Filtro: `active`, `search`. |
-| `POST` | `/suppliers` | Crea proveedor. |
+| `POST` | `/suppliers` | Crea proveedor (`MANAGER`+`ADMIN`, BR-058). |
 | `GET` | `/suppliers/{id}` | Detalle. |
-| `PATCH` | `/suppliers/{id}` | Actualiza datos. |
-| `POST` | `/suppliers/{id}/activate` \| `/deactivate` | Baja/alta lógica. |
-| `DELETE` | `/suppliers/{id}` | Eliminación real (BR-049); rechaza con 409 si tiene órdenes de compra asociadas. |
+| `PATCH` | `/suppliers/{id}` | Actualiza datos (`MANAGER`+`ADMIN`, BR-058). |
+| `POST` | `/suppliers/{id}/activate` \| `/deactivate` | Baja/alta lógica (`MANAGER`+`ADMIN`, BR-058). |
+| `DELETE` | `/suppliers/{id}` | Eliminación real, exclusiva de `ADMIN` (BR-058); rechaza con 409 si tiene órdenes de compra asociadas. |
 
 ### 7.7 Purchases
 

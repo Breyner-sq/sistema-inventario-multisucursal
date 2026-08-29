@@ -28,6 +28,7 @@ export function UsersPage() {
 
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<User | undefined>();
   const [deactivating, setDeactivating] = useState<User | undefined>();
   const [activating, setActivating] = useState<User | undefined>();
   const [deleting, setDeleting] = useState<User | undefined>();
@@ -120,6 +121,9 @@ export function UsersPage() {
                       </td>
                       {canWrite ? (
                         <td className="row__actions">
+                          <button type="button" onClick={() => setEditing(item)}>
+                            Editar
+                          </button>
                           {isSelf ? (
                             <span className="state__hint">Tu propia cuenta</span>
                           ) : (
@@ -133,7 +137,7 @@ export function UsersPage() {
                                   Activar
                                 </button>
                               )}
-                              <button type="button" onClick={() => setDeleting(item)}>
+                              <button type="button" className="button--danger" onClick={() => setDeleting(item)}>
                                 Eliminar
                               </button>
                             </>
@@ -152,6 +156,15 @@ export function UsersPage() {
 
       {creating ? (
         <UserFormDialog roles={rolesQuery.data ?? []} branches={branchesQuery.data?.content ?? []} onClose={() => setCreating(false)} />
+      ) : null}
+
+      {editing ? (
+        <UserFormDialog
+          user={editing}
+          roles={rolesQuery.data ?? []}
+          branches={branchesQuery.data?.content ?? []}
+          onClose={() => setEditing(undefined)}
+        />
       ) : null}
 
       {deactivating ? <DeactivateUserDialog user={deactivating} onClose={() => setDeactivating(undefined)} /> : null}

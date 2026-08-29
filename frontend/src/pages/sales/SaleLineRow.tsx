@@ -31,6 +31,7 @@ export function SaleLineRow({
   index,
   products,
   unitPrice,
+  stockOnHand,
   onChange,
   onRemove,
   canRemove,
@@ -40,6 +41,8 @@ export function SaleLineRow({
   index: number;
   products: Product[];
   unitPrice: number | undefined;
+  /** Stock del producto en la sucursal elegida — solo previsualización, el backend vuelve a validar disponibilidad al confirmar. */
+  stockOnHand: number | undefined;
   onChange: (index: number, patch: Partial<SaleLineDraft>) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
@@ -70,6 +73,7 @@ export function SaleLineRow({
         </select>
         {errors.productId ? <span role="alert" className="field__error">{errors.productId}</span> : null}
       </td>
+      <td>{line.productId ? (stockOnHand !== undefined ? stockOnHand : "Sin registrar") : "—"}</td>
       <td>
         <select
           aria-label={`Unidad de la línea ${index + 1}`}

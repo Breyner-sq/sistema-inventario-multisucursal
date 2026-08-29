@@ -238,12 +238,12 @@ class ProductApiTest {
     }
 
     @Test
-    void adminCanUpdateProductNameAndDescription() {
+    void adminCanUpdateProductNameDescriptionPriceAndMinimumStock() {
         String productId = createProduct("SKU-002", "Original", unUnit.getId());
 
         ResponseEntity<ProductResponse> response = patch(
                 "/api/v1/products/" + productId,
-                new UpdateProductRequest("Renombrado", "Nueva descripción"),
+                new UpdateProductRequest("Renombrado", "Nueva descripción", new BigDecimal("55.00"), new BigDecimal("25")),
                 adminToken,
                 ProductResponse.class);
 
@@ -251,6 +251,82 @@ class ProductApiTest {
         assertThat(response.getBody().name()).isEqualTo("Renombrado");
         assertThat(response.getBody().description()).isEqualTo("Nueva descripción");
         assertThat(response.getBody().sku()).isEqualTo("SKU-002");
+        assertThat(response.getBody().salePrice()).isEqualByComparingTo(new BigDecimal("55.00"));
+        assertThat(response.getBody().minimumStock()).isEqualByComparingTo(new BigDecimal("25"));
+    }
+
+    @Test
+    void updatingMinimumStockDoesNotAffectAlreadyMaterializedInventory() {
+        String productId = createProductWithMinimumStock("SKU-MINSTOCK-EDIT", new BigDecimal("10"));
+
+        // Primer movimiento: la fila de Inventory nace con el mínimo original (10).
+        HttpHeaders headers = authHeaders(adminToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        ResponseEntity<String> adjustment = restTemplate.exchange(
+                "/api/v1/inventory/adjustments", HttpMethod.POST,
+                new HttpEntity<>(Map.of(
+                        "branchId", branchId,
+                        "productId", Long.valueOf(productId),
+                        "direction", "INGRESO",
+                        "quantity", 5,
+                        "notes", "Siembra de prueba"),
+                        headers),
+                String.class);
+        assertThat(adjustment.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+
+        // Editar minimumStock después no debe tocar la fila de Inventory ya creada.
+        patch("/api/v1/products/" + productId,
+                new UpdateProductRequest("Producto " + productId, null, BigDecimal.TEN, new BigDecimal("999")),
+                adminToken, ProductResponse.class);
+
+        ResponseEntity<InventoryPageResponse> inventory = getWithToken(
+                "/api/v1/inventory?branchId=" + branchId + "&productId=" + productId, adminToken, InventoryPageResponse.class);
+        assertThat(inventory.getBody().content()).hasSize(1);
+        assertThat(inventory.getBody().content().get(0).minimumStock()).isEqualByComparingTo(new BigDecimal("10"));
+
+        ResponseEntity<ProductResponse> detail = getWithToken("/api/v1/products/" + productId, adminToken, ProductResponse.class);
+        assertThat(detail.getBody().minimumStock()).isEqualByComparingTo(new BigDecimal("999"));
+    }
+
+    @Test
+    void updatingProductWithNegativeMinimumStockReturns400() {
+        String productId = createProduct("SKU-BADMINSTOCK", "Producto", unUnit.getId());
+
+        assertThat(patch("/api/v1/products/" + productId,
+                new UpdateProductRequest("Producto", null, BigDecimal.TEN, new BigDecimal("-1")), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    // ---- Precio de venta editable (BR-057) ----
+
+    @Test
+    void updatingPriceClosesThePreviousOneInsteadOfOverwritingIt() {
+        String productId = createProductWithMinimumStock("SKU-PRICE-EDIT", BigDecimal.ZERO);
+
+        patch("/api/v1/products/" + productId, new UpdateProductRequest("Producto", null, new BigDecimal("20.00"), BigDecimal.ZERO), adminToken, ProductResponse.class);
+        ResponseEntity<ProductResponse> second = patch(
+                "/api/v1/products/" + productId, new UpdateProductRequest("Producto", null, new BigDecimal("30.00"), BigDecimal.ZERO), adminToken, ProductResponse.class);
+
+        assertThat(second.getBody().salePrice()).isEqualByComparingTo(new BigDecimal("30.00"));
+
+        String priceListsBody = getWithToken("/api/v1/price-lists?active=true", adminToken, String.class).getBody();
+        assertThat(priceListsBody).contains("Lista General");
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\"id\":\"(\\d+)\",\"name\":\"Lista General\"").matcher(priceListsBody);
+        assertThat(matcher.find()).as("la lista de precios global por defecto existe").isTrue();
+        String priceListId = matcher.group(1);
+
+        ResponseEntity<String> history = getWithToken("/api/v1/price-lists/" + priceListId + "/prices?includeHistory=true", adminToken, String.class);
+        assertThat(history.getBody()).contains("20.0000").contains("30.0000");
+    }
+
+    @Test
+    void updatingProductWithZeroOrNegativePriceReturns400() {
+        String productId = createProduct("SKU-BADPRICE", "Producto", unUnit.getId());
+
+        assertThat(patch("/api/v1/products/" + productId, new UpdateProductRequest("Producto", null, BigDecimal.ZERO, BigDecimal.ZERO), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(patch("/api/v1/products/" + productId, new UpdateProductRequest("Producto", null, new BigDecimal("-1"), BigDecimal.ZERO), adminToken, String.class)
+                .getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
     @Test
@@ -484,7 +560,7 @@ class ProductApiTest {
 
         assertThat(getWithToken("/api/v1/products/" + missingId, adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(patch("/api/v1/products/" + missingId, new UpdateProductRequest("X", null), adminToken, String.class)
+        assertThat(patch("/api/v1/products/" + missingId, new UpdateProductRequest("X", null, BigDecimal.TEN, BigDecimal.ZERO), adminToken, String.class)
                 .getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(postAction("/api/v1/products/" + missingId + "/deactivate", adminToken, String.class).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);

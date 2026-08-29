@@ -36,33 +36,36 @@ export function LoginPage() {
 
   return (
     <main className="login">
-      <h1>Iniciar sesión</h1>
-      <form onSubmit={handleSubmit} noValidate={false}>
-        <Field
-          id="email"
-          label="Correo electrónico"
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          required
-          autoComplete="username"
-        />
-        <Field
-          id="password"
-          label="Contraseña"
-          type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
-          autoComplete="current-password"
-        />
-        {/* El error del servidor se muestra tal cual lo clasifica la API:
-            credenciales inválidas, red caída, etc. No se adivina el motivo. */}
-        {error ? <ErrorState error={error} /> : null}
-        <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Entrando…" : "Entrar"}
-        </button>
-      </form>
+      <div className="login__card">
+        <p className="login__brand">Inventario Multi-Sucursal</p>
+        <h1>Iniciar sesión</h1>
+        <form onSubmit={handleSubmit} noValidate={false}>
+          <Field
+            id="email"
+            label="Correo electrónico"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            autoComplete="username"
+          />
+          <Field
+            id="password"
+            label="Contraseña"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            autoComplete="current-password"
+          />
+          {/* El error del servidor se muestra tal cual lo clasifica la API:
+              credenciales inválidas, red caída, etc. No se adivina el motivo. */}
+          {error ? <ErrorState error={error} /> : null}
+          <button type="submit" className="login__submit" disabled={isSubmitting}>
+            {isSubmitting ? "Entrando…" : "Entrar"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

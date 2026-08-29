@@ -189,6 +189,77 @@ describe("Pantalla de usuarios", () => {
     });
   });
 
+  describe("editar usuario (BR-058)", () => {
+    it("edita nombre, correo, rol y sucursal, y envía el PATCH al backend", async () => {
+      seedSession("ADMIN");
+      let edited = false;
+      const fetchSpy = mockFetch(
+        userRoutes((url, init) => {
+          if (/\/users\/3$/.test(url) && init?.method === "PATCH") {
+            edited = true;
+            return jsonResponse(200, { ...USERS[2], name: "Operador Renombrado", email: "renombrado@inventario.local", branchId: "2" });
+          }
+          if (url.includes("/users?") && edited) {
+            return jsonResponse(200, page([USERS[0], USERS[1], { ...USERS[2], name: "Operador Renombrado", email: "renombrado@inventario.local", branchId: "2" }]));
+          }
+          return undefined;
+        }),
+      );
+      renderApp("/usuarios");
+
+      const row = (await screen.findByText("operador.centro@inventario.local")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+
+      expect(within(dialog).getByLabelText(/^nombre$/i)).toHaveValue("Operador Centro");
+      expect(within(dialog).getByLabelText(/correo electrónico/i)).toHaveValue("operador.centro@inventario.local");
+      expect(within(dialog).queryByLabelText(/contraseña/i)).not.toBeInTheDocument();
+
+      await userEvent.clear(within(dialog).getByLabelText(/^nombre$/i));
+      await userEvent.type(within(dialog).getByLabelText(/^nombre$/i), "Operador Renombrado");
+      await userEvent.clear(within(dialog).getByLabelText(/correo electrónico/i));
+      await userEvent.type(within(dialog).getByLabelText(/correo electrónico/i), "renombrado@inventario.local");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      const patch = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+      expect(patch).toBeDefined();
+      expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({
+        name: "Operador Renombrado",
+        email: "renombrado@inventario.local",
+        role: "OPERATOR",
+      });
+      expect(await screen.findByText("Operador Renombrado")).toBeInTheDocument();
+    });
+
+    it("muestra el conflicto del backend sin ocultarlo cuando el correo ya existe", async () => {
+      seedSession("ADMIN");
+      mockFetch(
+        userRoutes((url, init) =>
+          /\/users\/3$/.test(url) && init?.method === "PATCH"
+            ? apiErrorResponse(409, "EMAIL_YA_EXISTE", "Ya existe un usuario con ese correo.")
+            : undefined,
+        ),
+      );
+      renderApp("/usuarios");
+
+      const row = (await screen.findByText("operador.centro@inventario.local")).closest("tr")!;
+      await userEvent.click(within(row).getByRole("button", { name: /^editar$/i }));
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.click(within(dialog).getByRole("button", { name: /guardar/i }));
+
+      expect(await screen.findByText(/ya existe un usuario con ese correo/i)).toBeInTheDocument();
+    });
+
+    it("también se puede editar la propia cuenta", async () => {
+      seedSession("ADMIN");
+      mockFetch(userRoutes());
+      renderApp("/usuarios");
+
+      const ownRow = (await screen.findByText("admin@inventario.local")).closest("tr")!;
+      expect(within(ownRow).getByRole("button", { name: /^editar$/i })).toBeInTheDocument();
+    });
+  });
+
   describe("activar, desactivar y eliminar", () => {
     it("oculta las acciones de activar/desactivar/eliminar sobre la propia cuenta", async () => {
       seedSession("ADMIN"); // userOfRole da id "1", igual que USERS[0] (admin@inventario.local).

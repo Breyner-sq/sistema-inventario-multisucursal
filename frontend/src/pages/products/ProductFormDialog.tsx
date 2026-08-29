@@ -11,9 +11,13 @@ import type { Product, UnitOfMeasure } from "../../types/api";
 /**
  * Alta y edición de producto en un mismo diálogo, porque comparten campos.
  *
- * <p>En edición, `sku` y unidad base se muestran como datos fijos: el backend
- * solo acepta `name` y `description` en el PATCH (son inmutables por decisión
- * de modelo, no por limitación de la interfaz).
+ * <p>En edición, `sku` y unidad base quedan como datos fijos (inmutables por
+ * decisión de modelo, BR-026). El precio de venta (BR-057) y el stock mínimo
+ * (BR-059) sí se editan después de creado: el precio se fija como el nuevo
+ * precio vigente en la lista de precios global por defecto, cerrando el
+ * anterior; el stock mínimo solo cambia el valor de siembra para sucursales
+ * que aún no tengan `Inventory` de este producto, sin tocar las que ya lo
+ * tienen.
  */
 export function ProductFormDialog({
   product,
@@ -37,7 +41,12 @@ export function ProductFormDialog({
   const mutation = useMutation({
     mutationFn: () =>
       isEdit
-        ? updateProduct(product.id, { name: name.trim(), description: description.trim() || null })
+        ? updateProduct(product.id, {
+            name: name.trim(),
+            description: description.trim() || null,
+            unitPrice: Number(unitPrice),
+            minimumStock: Number(minimumStock),
+          })
         : createProduct({
             sku: sku.trim(),
             name: name.trim(),
@@ -65,10 +74,10 @@ export function ProductFormDialog({
     if (!isEdit && !sku.trim()) errors.sku = "El SKU es obligatorio.";
     if (!name.trim()) errors.name = "El nombre es obligatorio.";
     if (!isEdit && !baseUnitId) errors.baseUnitOfMeasureId = "Selecciona la unidad base.";
-    if (!isEdit && (!minimumStock.trim() || Number(minimumStock) < 0)) {
+    if (!minimumStock.trim() || Number(minimumStock) < 0) {
       errors.minimumStock = "Indica el stock mínimo (0 o mayor).";
     }
-    if (!isEdit && (!unitPrice.trim() || Number(unitPrice) <= 0)) {
+    if (!unitPrice.trim() || Number(unitPrice) <= 0) {
       errors.unitPrice = "Indica el precio de venta (mayor que 0).";
     }
     setLocalErrors(errors);
@@ -130,35 +139,33 @@ export function ProductFormDialog({
           </SelectField>
         ) : null}
 
-        {!isEdit ? (
-          <>
-            <Field
-              id="product-minimum-stock"
-              label="Stock mínimo"
-              inputMode="decimal"
-              value={minimumStock}
-              onChange={(event) => setMinimumStock(event.target.value)}
-              error={errorFor("minimumStock")}
-            />
-            <p className="state__hint">
-              Umbral que usarán el estado de reabastecimiento y las alertas de stock en cada sucursal que reciba este
-              producto por primera vez.
-            </p>
+        <Field
+          id="product-minimum-stock"
+          label="Stock mínimo"
+          inputMode="decimal"
+          value={minimumStock}
+          onChange={(event) => setMinimumStock(event.target.value)}
+          error={errorFor("minimumStock")}
+        />
+        <p className="state__hint">
+          {isEdit
+            ? "Cambiarlo no afecta el inventario de sucursales que ya reciben este producto: solo aplica como valor de arranque a las que aún no lo tengan."
+            : "Umbral que usarán el estado de reabastecimiento y las alertas de stock en cada sucursal que reciba este producto por primera vez."}
+        </p>
 
-            <Field
-              id="product-unit-price"
-              label="Precio de venta"
-              inputMode="decimal"
-              value={unitPrice}
-              onChange={(event) => setUnitPrice(event.target.value)}
-              error={errorFor("unitPrice")}
-            />
-            <p className="state__hint">
-              Precio con el que este producto queda disponible de inmediato para nuevas ventas, sin configurar
-              ninguna lista de precios aparte.
-            </p>
-          </>
-        ) : null}
+        <Field
+          id="product-unit-price"
+          label="Precio de venta"
+          inputMode="decimal"
+          value={unitPrice}
+          onChange={(event) => setUnitPrice(event.target.value)}
+          error={errorFor("unitPrice")}
+        />
+        <p className="state__hint">
+          {isEdit
+            ? "Cambiarlo no altera ventas ya registradas: se fija como el nuevo precio vigente para las próximas."
+            : "Precio con el que este producto queda disponible de inmediato para nuevas ventas, sin configurar ninguna lista de precios aparte."}
+        </p>
 
         <FormErrorMessage error={serverErrors.general ? mutation.error : null} />
 

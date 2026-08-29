@@ -14,6 +14,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
+    /** BR-058: valida unicidad de correo al editar, sin que el propio usuario choque contra su correo actual. */
+    boolean existsByEmailAndIdNot(String email, Long id);
+
     /**
      * Usado por {@code branches.BranchService} para impedir desactivar una
      * sucursal que todavía tiene usuarios activos asignados (UC-15, flujo

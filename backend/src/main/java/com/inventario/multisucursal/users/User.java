@@ -61,8 +61,9 @@ public class User extends Auditable {
         this.branchId = branchId;
     }
 
-    public void updateProfile(String name, RoleCode roleCode, Long branchId) {
+    public void updateProfile(String name, String email, RoleCode roleCode, Long branchId) {
         this.name = name;
+        this.email = email;
         this.roleCode = roleCode;
         this.branchId = branchId;
     }
