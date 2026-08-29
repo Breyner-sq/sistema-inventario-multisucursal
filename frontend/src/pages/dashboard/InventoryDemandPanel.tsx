@@ -11,6 +11,7 @@ function DemandTable({ title, entries, emptyText }: { title: string; entries: Pr
       {entries.length === 0 ? (
         <p className="state__hint">{emptyText}</p>
       ) : (
+        <div style={{ overflowX: "auto" }}>
         <table>
           <thead>
             <tr>
@@ -31,6 +32,7 @@ function DemandTable({ title, entries, emptyText }: { title: string; entries: Pr
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

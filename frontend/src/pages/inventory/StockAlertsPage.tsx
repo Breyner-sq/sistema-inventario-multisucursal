@@ -108,6 +108,7 @@ export function StockAlertsPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} alerta(s)</caption>
               <thead>
@@ -143,6 +144,7 @@ export function StockAlertsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

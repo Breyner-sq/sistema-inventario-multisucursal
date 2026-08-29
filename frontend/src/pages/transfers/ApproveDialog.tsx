@@ -63,6 +63,7 @@ export function ApproveDialog({
 
   return (
     <Modal title={`Aprobar ${transfer.transferNumber}`} onClose={onClose}>
+      <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
           <tr>
@@ -88,6 +89,7 @@ export function ApproveDialog({
           ))}
         </tbody>
       </table>
+      </div>
 
       {localError ? <p role="alert" className="field__error">{localError}</p> : null}
       <FormErrorMessage error={mutation.error} />

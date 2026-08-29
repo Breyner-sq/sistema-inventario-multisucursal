@@ -158,6 +158,7 @@ export function PurchaseOrdersPage() {
           }
           return (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} orden(es) de compra{sort ? " · orden alfabético dentro de esta página" : ""}</caption>
               <thead>
@@ -208,6 +209,7 @@ export function PurchaseOrdersPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
           );

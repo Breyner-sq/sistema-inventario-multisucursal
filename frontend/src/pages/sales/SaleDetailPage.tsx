@@ -128,6 +128,7 @@ export function SaleDetailPage() {
                 <div><dt>Estado</dt><dd><span className="badge badge--ok">{sale.status}</span></dd></div>
               </dl>
 
+              <div style={{ overflowX: "auto" }}>
               <table>
                 <thead>
                   <tr>
@@ -156,6 +157,7 @@ export function SaleDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               <dl className="detail-grid">
                 <div><dt>Subtotal</dt><dd>{sale.subtotal}</dd></div>
@@ -174,6 +176,7 @@ export function SaleDetailPage() {
                   {!confirming ? (
                     <>
                       <p>Indica la cantidad a devolver de cada línea que corresponda:</p>
+                      <div style={{ overflowX: "auto" }}>
                       <table>
                         <thead>
                           <tr>
@@ -202,6 +205,7 @@ export function SaleDetailPage() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                       {localError ? <p role="alert" className="field__error">{localError}</p> : null}
                       <FormErrorMessage error={returnMutation.error} />
                       <div className="modal__actions">

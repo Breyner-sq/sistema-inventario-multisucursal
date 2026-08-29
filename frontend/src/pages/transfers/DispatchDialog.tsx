@@ -141,6 +141,7 @@ export function DispatchDialog({
         </div>
       </div>
 
+      <div style={{ overflowX: "auto" }}>
       <table>
         <thead>
           <tr>
@@ -166,6 +167,7 @@ export function DispatchDialog({
           ))}
         </tbody>
       </table>
+      </div>
 
       {localError ? <p role="alert" className="field__error">{localError}</p> : null}
 

@@ -156,6 +156,7 @@ export function PurchaseOrderDetailPage() {
               ) : null}
 
               <h2>Líneas</h2>
+              <div style={{ overflowX: "auto" }}>
               <table>
                 <thead>
                   <tr>
@@ -209,6 +210,7 @@ export function PurchaseOrderDetailPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {canReceive && receivableItems.length > 0 ? (
                 <div className="panel">

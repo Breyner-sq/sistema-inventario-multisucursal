@@ -88,6 +88,7 @@ export function BranchesPage() {
         }
       >
         {(page) => (
+          <div style={{ overflowX: "auto" }}>
           <table>
             <caption>{page.totalElements} sucursal(es)</caption>
             <thead>
@@ -127,6 +128,7 @@ export function BranchesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </AsyncBoundary>
 

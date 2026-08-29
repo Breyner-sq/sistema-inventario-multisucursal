@@ -35,6 +35,7 @@ export function ActiveTransfersPanel({ branchId }: { branchId: string }) {
               <div><dt>Unidades en tránsito</dt><dd>{result.totalUnitsInTransit}</dd></div>
               <div><dt>Unidades pendientes de despacho</dt><dd>{result.totalUnitsPendingDispatch}</dd></div>
             </dl>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <thead>
                 <tr>
@@ -59,6 +60,7 @@ export function ActiveTransfersPanel({ branchId }: { branchId: string }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
       </AsyncBoundary>

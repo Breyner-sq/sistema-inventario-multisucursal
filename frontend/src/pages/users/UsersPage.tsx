@@ -90,6 +90,7 @@ export function UsersPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} usuario(s)</caption>
               <thead>
@@ -149,6 +150,7 @@ export function UsersPage() {
                 })}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

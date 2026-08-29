@@ -116,6 +116,7 @@ export function TransfersPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} transferencia(s)</caption>
               <thead>
@@ -149,6 +150,7 @@ export function TransfersPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

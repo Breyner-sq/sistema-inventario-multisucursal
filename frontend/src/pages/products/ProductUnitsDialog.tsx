@@ -85,6 +85,7 @@ export function ProductUnitsDialog({
         emptyTitle="Este producto no tiene unidades registradas."
       >
         {(rows) => (
+          <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -138,6 +139,7 @@ export function ProductUnitsDialog({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </AsyncBoundary>
 

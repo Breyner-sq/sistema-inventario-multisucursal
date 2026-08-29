@@ -114,6 +114,7 @@ export function RoutesPage() {
         emptyTitle="No hay rutas clasificadas que coincidan con los filtros."
       >
         {(result) => (
+          <div style={{ overflowX: "auto" }}>
           <table>
             <caption>{result.totalElements} ruta(s)</caption>
             <thead>
@@ -156,6 +157,7 @@ export function RoutesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </AsyncBoundary>
 

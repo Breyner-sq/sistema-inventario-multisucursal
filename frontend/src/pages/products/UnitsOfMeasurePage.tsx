@@ -69,6 +69,7 @@ export function UnitsOfMeasurePage() {
         emptyTitle="Todavía no hay unidades de medida registradas."
       >
         {(rows) => (
+          <div style={{ overflowX: "auto" }}>
           <table>
             <caption>{rows.length} unidad(es)</caption>
             <thead>
@@ -94,6 +95,7 @@ export function UnitsOfMeasurePage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </AsyncBoundary>
 

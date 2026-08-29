@@ -1,4 +1,5 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { visibleNavItems } from "../../auth/permissions";
 
@@ -6,6 +7,13 @@ import { visibleNavItems } from "../../auth/permissions";
 export function AppLayout() {
   const { user, signOut } = useAuth();
   const items = visibleNavItems(user?.role);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+
+  // El menú de navegación (pantallas angostas) se cierra solo al cambiar de ruta.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <div className="app">
@@ -13,7 +21,17 @@ export function AppLayout() {
         <Link to="/" className="app__brand">
           Inventario Multi-Sucursal
         </Link>
-        <nav aria-label="Navegación principal">
+        <button
+          type="button"
+          className="app__menu-toggle"
+          aria-expanded={menuOpen}
+          aria-controls="app-nav"
+          aria-label={menuOpen ? "Cerrar menú de navegación" : "Abrir menú de navegación"}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+        <nav id="app-nav" aria-label="Navegación principal" data-open={menuOpen}>
           <ul>
             {items.map((item) => (
               <li key={item.path}>

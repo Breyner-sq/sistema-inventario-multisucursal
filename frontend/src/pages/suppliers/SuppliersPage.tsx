@@ -115,6 +115,7 @@ export function SuppliersPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} proveedor(es)</caption>
               <thead>
@@ -164,6 +165,7 @@ export function SuppliersPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

@@ -113,6 +113,7 @@ export function LogisticsCompliancePage() {
         {(report) => (
           <>
             <h2>Resumen</h2>
+            <div style={{ overflowX: "auto" }}>
             <table className="table-fixed">
               <thead>
                 <tr>
@@ -133,11 +134,13 @@ export function LogisticsCompliancePage() {
                 </tr>
               </tbody>
             </table>
+            </div>
 
             <h2>Por ruta</h2>
             {report.byRoute.length === 0 ? (
               <p className="state__hint">No hay transferencias despachadas que coincidan con los filtros.</p>
             ) : (
+              <div style={{ overflowX: "auto" }}>
               <table className="table-fixed">
                 {/* `table-layout: fixed` (para igualar el largo con "Resumen") reparte el ancho
                     entre columnas sin mirar el contenido — sin este `<colgroup>`, "Ruta"/
@@ -183,6 +186,7 @@ export function LogisticsCompliancePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )}

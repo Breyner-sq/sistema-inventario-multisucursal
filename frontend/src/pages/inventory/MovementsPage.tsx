@@ -125,6 +125,7 @@ export function MovementsPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} movimiento(s), del más reciente al más antiguo</caption>
               <thead>
@@ -161,6 +162,7 @@ export function MovementsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

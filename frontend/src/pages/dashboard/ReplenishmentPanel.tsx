@@ -33,6 +33,7 @@ export function ReplenishmentPanel({ branchId }: { branchId: string }) {
             <p>
               <strong>{result.lowStockCount}</strong> producto(s) bajo el umbral de reabastecimiento.
             </p>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <thead>
                 <tr>
@@ -51,6 +52,7 @@ export function ReplenishmentPanel({ branchId }: { branchId: string }) {
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
       </AsyncBoundary>

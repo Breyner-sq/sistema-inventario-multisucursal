@@ -154,6 +154,67 @@ a:hover { text-decoration: underline; }
 .app__session { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
 .app__content { max-width: 960px; margin: 2rem auto; padding: 0 1.5rem; }
 
+/* Botón de menú (☰): solo existe visualmente en pantallas angostas, ver media query más abajo. */
+.app__menu-toggle {
+  display: none;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+  background: none;
+  flex-shrink: 0;
+}
+
+/*
+ * Responsive: por debajo de este ancho, la barra de doce ítems ya no cabe en
+ * una fila (ni siquiera envolviendo, sección de diseño móvil pedida
+ * explícitamente) — el menú pasa a un panel colapsable que se abre con el
+ * botón ☰, en vez de forzar un header de varias líneas siempre visible.
+ */
+@media (max-width: 720px) {
+  .app__header { padding: 0.75rem 1rem; gap: 0.75rem; }
+  .app__brand { font-size: 0.95rem; }
+  .app__menu-toggle { display: inline-flex; }
+  .app__header nav {
+    order: 3;
+    flex-basis: 100%;
+    display: none;
+  }
+  .app__header nav[data-open="true"] { display: block; }
+  .app__header nav ul { flex-direction: column; align-items: stretch; gap: 0.1rem; padding-top: 0.35rem; }
+  .app__header nav a { width: 100%; padding: 0.6rem 0.75rem; }
+  .app__session { margin-left: auto; font-size: 0.85rem; }
+  .app__session span { display: none; }
+
+  .app__content { padding: 0 1rem; margin: 1.25rem auto; }
+
+  .page__header { gap: 0.75rem; }
+  .page__header h1 { font-size: 1.4rem; }
+  .page__actions { width: 100%; }
+  .page__actions button { flex: 1 1 auto; }
+
+  .filters { gap: 0.75rem; }
+  .filters .field { flex: 1 1 10rem; }
+
+  .modal__backdrop { padding: 0; align-items: stretch; }
+  .modal { width: 100%; min-height: 100%; padding: 1.25rem; border-radius: 0; }
+
+  .panel { padding: 1rem; }
+
+  .receipt-inputs { flex-wrap: wrap; }
+
+  th, td { padding: 0.55rem 0.6rem; font-size: 0.92rem; }
+
+  .pagination { flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
+
+  .conflict-banner { flex-direction: column; align-items: stretch; }
+
+  .dashboard-panel__columns { grid-template-columns: 1fr; }
+}
+
 /* Login: tarjeta centrada horizontal y verticalmente, no un bloque a la izquierda con margen superior. */
 .login {
   min-height: 100vh;

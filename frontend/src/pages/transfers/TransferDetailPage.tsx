@@ -133,6 +133,7 @@ function TransferDetailView({ id }: { id: string }) {
               <Timeline transfer={transfer} />
 
               <h2>Líneas</h2>
+              <div style={{ overflowX: "auto" }}>
               <table>
                 <thead>
                   <tr>
@@ -184,6 +185,7 @@ function TransferDetailView({ id }: { id: string }) {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               {transfer.status === "REQUESTED" && canApprove ? (
                 <div className="modal__actions">

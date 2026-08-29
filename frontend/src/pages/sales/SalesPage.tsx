@@ -72,6 +72,7 @@ export function SalesPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} venta(s)</caption>
               <thead>
@@ -99,6 +100,7 @@ export function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

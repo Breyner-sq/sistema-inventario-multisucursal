@@ -116,6 +116,7 @@ export function InventoryPage() {
       >
         {(result) => (
           <>
+            <div style={{ overflowX: "auto" }}>
             <table>
               <caption>{result.totalElements} registro(s) de inventario</caption>
               <thead>
@@ -160,6 +161,7 @@ export function InventoryPage() {
                 })}
               </tbody>
             </table>
+            </div>
             <Pagination page={result} onPageChange={setPage} />
           </>
         )}

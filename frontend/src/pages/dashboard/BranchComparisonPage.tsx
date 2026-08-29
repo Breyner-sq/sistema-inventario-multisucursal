@@ -30,6 +30,7 @@ export function BranchComparisonPage() {
         emptyTitle="No hay sucursales activas para comparar."
       >
         {(result) => (
+          <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
@@ -50,6 +51,7 @@ export function BranchComparisonPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </AsyncBoundary>
     </section>
