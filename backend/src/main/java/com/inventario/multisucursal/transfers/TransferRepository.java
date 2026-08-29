@@ -130,6 +130,26 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
             Pageable pageable);
 
     /**
+     * Base del reporte exportable de transferencias (BR-056): misma regla de
+     * visibilidad que {@link #search} (origen o destino), acotada además por
+     * fecha de solicitud — a diferencia de {@link #search}, que no filtra por
+     * fecha porque una página de la UI no necesita acotar cuánto trae.
+     */
+    @Query("""
+            SELECT t FROM Transfer t
+             WHERE (:branchId IS NULL OR t.originBranchId = :branchId OR t.destinationBranchId = :branchId)
+               AND (:status IS NULL OR t.status = :status)
+               AND t.requestedAt >= :dateFrom AND t.requestedAt <= :dateTo
+             ORDER BY t.requestedAt DESC
+            """)
+    Page<Transfer> searchForReport(
+            @Param("branchId") Long branchId,
+            @Param("status") TransferStatus status,
+            @Param("dateFrom") Instant dateFrom,
+            @Param("dateTo") Instant dateTo,
+            Pageable pageable);
+
+    /**
      * Transferencias activas de una sucursal —origen o destino— para el
      * dashboard (BR-041, RF-033). "Activa" = cualquier estado no terminal de
      * la máquina de estados de BR-020: excluye {@code REJECTED},

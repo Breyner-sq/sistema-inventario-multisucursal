@@ -134,7 +134,8 @@ Convención de la tabla: **rol** con acceso; "propia sucursal" significa que el 
 | `routes` | cualquier rol autenticado | `MANAGER` + `ADMIN` |
 | `dashboard/*` | propia sucursal, todos los roles | — |
 | `dashboard/branch-comparison` | `MANAGER` + `ADMIN` únicamente (RF-035) | — |
-| `reports/logistics-compliance` | propia sucursal para `OPERATOR`; cualquiera para `MANAGER`/`ADMIN` | — |
+| `reports/logistics-compliance` (interactivo y `/export`) | propia sucursal para `OPERATOR`; cualquiera para `MANAGER`/`ADMIN` | — |
+| `reports/inventory-movements/export`, `reports/sales/export`, `reports/transfers/export` | propia sucursal para `OPERATOR`/`MANAGER` (mismo alcance que el listado interactivo de cada módulo); cualquiera para `ADMIN` | — |
 | `events` (SSE) | cualquier rol autenticado, eventos filtrados a sus sucursales visibles | — |
 
 ---
@@ -253,6 +254,10 @@ Convención de nomenclatura: sustantivos en plural para colecciones; acciones de
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/reports/logistics-compliance` | Cumplimiento logístico (RF-027, RF-030). Filtros: `branchId`, `routeId`, `dateFrom`, `dateTo`. |
+| `GET` | `/reports/inventory-movements/export` | Reporte exportable en Excel de movimientos de inventario (BR-056). Filtros: `branchId`, `productId`, `reason`, `dateFrom`/`dateTo` **obligatorios**. Devuelve `.xlsx` (`Content-Disposition: attachment`), tope de 5000 filas. |
+| `GET` | `/reports/sales/export` | Reporte exportable en Excel de ventas (BR-056). Filtros: `branchId`, `status`, `dateFrom`/`dateTo` obligatorios. |
+| `GET` | `/reports/transfers/export` | Reporte exportable en Excel de transferencias (BR-056). Filtros: `branchId`, `status`, `dateFrom`/`dateTo` obligatorios. |
+| `GET` | `/reports/logistics-compliance/export` | Mismo reporte que el endpoint interactivo, exportado a Excel (BR-056), pero con `dateFrom`/`dateTo` obligatorios (el interactivo los acepta abiertos). Filtros: `branchId`, `routeId`. |
 | `GET` | `/dashboard/sales-summary` | Ventas del mes vs. anteriores (RF-031). Filtros: `branchId`, `months` (por defecto 3, `docs/PROJECT_BRIEF.md` supuesto 6). |
 | `GET` | `/dashboard/inventory-rotation` | Rotación y productos alta/baja demanda (RF-032). Filtro: `branchId`. |
 | `GET` | `/dashboard/active-transfers` | Transferencias activas e impacto (RF-033). Filtro: `branchId`. |

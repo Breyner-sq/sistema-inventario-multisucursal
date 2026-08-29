@@ -80,8 +80,11 @@ public class SecurityConfig {
         // (docs/API_DESIGN.md, sección 2); sin declararlo, el preflight lo rechazaría.
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Request-Id", "Accept"));
         // Se expone el identificador de correlación para que el cliente pueda
-        // mostrarlo y cruzarlo con los logs del backend.
-        configuration.setExposedHeaders(List.of("X-Request-Id"));
+        // mostrarlo y cruzarlo con los logs del backend. Content-Disposition se
+        // expone para que el cliente lea el nombre de archivo de un reporte
+        // exportado (BR-056) — sin esto, `fetch` recibe el blob pero no puede
+        // leer el encabezado con el nombre sugerido por el servidor.
+        configuration.setExposedHeaders(List.of("X-Request-Id", "Content-Disposition"));
         // Sin credenciales: la autenticación viaja en el encabezado Authorization,
         // no en cookies, así que el navegador no necesita enviarlas.
         configuration.setAllowCredentials(false);

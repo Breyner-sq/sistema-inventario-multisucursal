@@ -7,6 +7,7 @@ import com.inventario.multisucursal.common.exception.BadRequestException;
 import com.inventario.multisucursal.common.exception.BusinessRuleViolationException;
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
+import com.inventario.multisucursal.common.reports.ReportRangeValidator;
 import com.inventario.multisucursal.common.web.PageResponse;
 import com.inventario.multisucursal.events.DomainEvent;
 import com.inventario.multisucursal.events.DomainEventPublisher;
@@ -22,6 +23,8 @@ import com.inventario.multisucursal.logistics.RouteService;
 import com.inventario.multisucursal.products.Product;
 import com.inventario.multisucursal.products.ProductRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +74,8 @@ public class TransferService {
 
     private static final int MAX_RETRIES = 3;
     private static final int QUANTITY_SCALE = 6;
+    /** BR-056: tope de filas de un reporte exportable — protege contra un rango sin acotar. */
+    private static final int MAX_EXPORT_ROWS = 5000;
 
     private final TransferRepository transferRepository;
     private final TransferItemRepository transferItemRepository;
@@ -384,6 +389,24 @@ public class TransferService {
         Long effectiveBranchId = scope != null ? scope : branchId;
         return PageResponse.from(transferRepository.search(effectiveBranchId, role, status, pageable)
                 .map(transfer -> TransferResponse.from(transfer, transferItemRepository.findByTransferId(transfer.getId()))));
+    }
+
+    /**
+     * BR-056: base del reporte exportable de transferencias. {@code dateFrom}/
+     * {@code dateTo} son obligatorios y el resultado está acotado a
+     * {@value #MAX_EXPORT_ROWS} filas, a diferencia de {@link #list}.
+     */
+    public List<TransferResponse> listForExport(Long branchId, TransferStatus status, Instant dateFrom, Instant dateTo) {
+        ReportRangeValidator.requireValidRange(dateFrom, dateTo);
+        Long effectiveBranchId = authorizationService.resolveBranchFilter(branchId);
+
+        Pageable capped = PageRequest.of(0, MAX_EXPORT_ROWS + 1);
+        Page<Transfer> page = transferRepository.searchForReport(effectiveBranchId, status, dateFrom, dateTo, capped);
+        ReportRangeValidator.requireWithinRowLimit(page.getTotalElements(), MAX_EXPORT_ROWS, "transferencias");
+
+        return page.getContent().stream()
+                .map(transfer -> TransferResponse.from(transfer, transferItemRepository.findByTransferId(transfer.getId())))
+                .toList();
     }
 
     /**

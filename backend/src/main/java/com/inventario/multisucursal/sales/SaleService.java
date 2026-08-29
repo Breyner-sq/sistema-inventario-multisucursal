@@ -8,6 +8,7 @@ import com.inventario.multisucursal.common.exception.BadRequestException;
 import com.inventario.multisucursal.common.exception.BusinessRuleViolationException;
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
+import com.inventario.multisucursal.common.reports.ReportRangeValidator;
 import com.inventario.multisucursal.common.web.PageResponse;
 import com.inventario.multisucursal.events.DomainEvent;
 import com.inventario.multisucursal.events.DomainEventPublisher;
@@ -30,7 +31,9 @@ import com.inventario.multisucursal.users.RoleCode;
 import com.inventario.multisucursal.users.User;
 import com.inventario.multisucursal.users.UserRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +66,8 @@ public class SaleService {
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
     private static final Instant MIN_SALE_DATE = Instant.parse("1900-01-01T00:00:00Z");
     private static final Instant MAX_SALE_DATE = Instant.parse("9999-12-31T23:59:59Z");
+    /** BR-056: tope de filas de un reporte exportable — protege contra un rango sin acotar. */
+    private static final int MAX_EXPORT_ROWS = 5000;
 
     private final SaleRepository saleRepository;
     private final SaleItemRepository saleItemRepository;
@@ -201,6 +206,26 @@ public class SaleService {
         Map<Long, String> namesByUserId = resolveUserNames(page.getContent());
         return PageResponse.from(page.map(sale -> SaleResponse.from(
                 sale, saleItemRepository.findBySaleId(sale.getId()), namesByUserId.get(sale.getSoldByUserId()))));
+    }
+
+    /**
+     * BR-056: base del reporte exportable de ventas. {@code dateFrom}/
+     * {@code dateTo} son obligatorios (a diferencia de {@link #list}, que
+     * los completa con límites amplios por defecto) y el resultado está
+     * acotado a {@value #MAX_EXPORT_ROWS} filas.
+     */
+    public List<SaleResponse> listForExport(Long branchId, SaleStatus status, Instant dateFrom, Instant dateTo) {
+        ReportRangeValidator.requireValidRange(dateFrom, dateTo);
+        Long effectiveBranchId = authorizationService.resolveBranchFilter(branchId);
+
+        Pageable capped = PageRequest.of(0, MAX_EXPORT_ROWS + 1, Sort.by(Sort.Direction.DESC, "saleDate"));
+        Page<Sale> page = saleRepository.search(effectiveBranchId, status, dateFrom, dateTo, capped);
+        ReportRangeValidator.requireWithinRowLimit(page.getTotalElements(), MAX_EXPORT_ROWS, "ventas");
+
+        Map<Long, String> namesByUserId = resolveUserNames(page.getContent());
+        return page.getContent().stream()
+                .map(sale -> SaleResponse.from(sale, saleItemRepository.findBySaleId(sale.getId()), namesByUserId.get(sale.getSoldByUserId())))
+                .toList();
     }
 
     /** BR-054: {@code GET /users} es ADMIN-only, así que el nombre del responsable se resuelve aquí, no en el cliente. */

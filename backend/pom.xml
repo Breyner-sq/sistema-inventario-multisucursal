@@ -66,6 +66,19 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!--
+      Generacion de reportes exportables en Excel (.xlsx) - docs/BUSINESS_RULES.md
+      BR-056. Apache POI (Apache-2.0, sin problemas de licenciamiento) es el
+      estandar de facto en Java para esto; no hay forma razonable de generar un
+      .xlsx real sin una libreria dedicada. Solo `poi-ooxml` (formato moderno
+      .xlsx via XSSF/SXSSF) - no se necesita el formato binario legado .xls.
+    -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+
     <!-- Spring Security + JWT + RBAC (ADR-005, TD-007, TD-008) -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

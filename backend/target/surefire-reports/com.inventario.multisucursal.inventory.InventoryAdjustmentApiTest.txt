@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.inventory.InventoryAdjustmentApiTest
 -------------------------------------------------------------------------------
-Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.659 s -- in com.inventario.multisucursal.inventory.InventoryAdjustmentApiTest
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.763 s -- in com.inventario.multisucursal.inventory.InventoryAdjustmentApiTest

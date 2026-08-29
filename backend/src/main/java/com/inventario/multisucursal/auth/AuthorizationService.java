@@ -57,6 +57,23 @@ public class AuthorizationService {
         return user.role() == RoleCode.ADMIN ? null : user.branchId();
     }
 
+    /**
+     * Resuelve el filtro de sucursal para una consulta/reporte (BR-056): si
+     * se pide una sucursal explícita, exige pertenecer a ella (o ser
+     * {@code ADMIN}); si no se pide ninguna, usa el alcance propio del
+     * usuario ({@code null} para {@code ADMIN} = sin restricción). A
+     * diferencia de silenciar la sucursal pedida y sustituirla por la propia,
+     * rechazar explícitamente es más transparente para una exportación: el
+     * archivo nunca contiene datos de una sucursal distinta a la solicitada.
+     */
+    public Long resolveBranchFilter(Long requestedBranchId) {
+        if (requestedBranchId != null) {
+            requireBranchAccess(requestedBranchId);
+            return requestedBranchId;
+        }
+        return currentBranchScopeOrNull();
+    }
+
     private AuthenticatedUser currentUser() {
         return (AuthenticatedUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }

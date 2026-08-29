@@ -5,6 +5,7 @@
 /app/src/test/java/com/inventario/multisucursal/branches/BranchApiTest.java
 /app/src/test/java/com/inventario/multisucursal/common/audit/AuditableEntityTest.java
 /app/src/test/java/com/inventario/multisucursal/common/audit/AuditableTestEntity.java
+/app/src/test/java/com/inventario/multisucursal/common/reports/ReportRangeValidatorTest.java
 /app/src/test/java/com/inventario/multisucursal/common/web/ErrorFormatTestController.java
 /app/src/test/java/com/inventario/multisucursal/common/web/GlobalExceptionHandlerTest.java
 /app/src/test/java/com/inventario/multisucursal/dashboard/DashboardApiTest.java
@@ -22,6 +23,7 @@
 /app/src/test/java/com/inventario/multisucursal/purchases/PurchaseReceiptApiTest.java
 /app/src/test/java/com/inventario/multisucursal/purchases/PurchaseReceiptRollbackTest.java
 /app/src/test/java/com/inventario/multisucursal/reports/LogisticsComplianceApiTest.java
+/app/src/test/java/com/inventario/multisucursal/reports/ReportExportApiTest.java
 /app/src/test/java/com/inventario/multisucursal/sales/SaleApiTest.java
 /app/src/test/java/com/inventario/multisucursal/sales/SaleConcurrencyTest.java
 /app/src/test/java/com/inventario/multisucursal/sales/SaleRollbackTest.java

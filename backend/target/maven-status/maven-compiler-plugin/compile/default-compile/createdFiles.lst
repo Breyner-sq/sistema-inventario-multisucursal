@@ -7,6 +7,7 @@ com/inventario/multisucursal/transfers/TransferItemResponse.class
 com/inventario/multisucursal/events/DomainEventPublisher.class
 com/inventario/multisucursal/dashboard/ActiveTransfersResponse$ActiveTransferEntry.class
 com/inventario/multisucursal/purchases/PurchaseOrderItemRepository.class
+com/inventario/multisucursal/reports/ReportSheet$ReportColumn.class
 com/inventario/multisucursal/purchases/PurchaseReceiptService.class
 com/inventario/multisucursal/events/EventPayload.class
 com/inventario/multisucursal/products/PriceList.class
@@ -31,6 +32,7 @@ com/inventario/multisucursal/dashboard/SalesTrendResponse.class
 com/inventario/multisucursal/purchases/PurchaseReceiptRequest.class
 com/inventario/multisucursal/config/JacksonConfig.class
 com/inventario/multisucursal/common/web/GlobalExceptionHandler.class
+com/inventario/multisucursal/reports/ReportSheet.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse$AppliedFilters.class
 com/inventario/multisucursal/logistics/RouteResponse.class
 com/inventario/multisucursal/auth/InvalidCredentialsException.class
@@ -112,8 +114,10 @@ com/inventario/multisucursal/inventory/InventoryMovementService.class
 com/inventario/multisucursal/branches/BranchService.class
 com/inventario/multisucursal/transfers/DispatchTransferRequest.class
 com/inventario/multisucursal/transfers/TransferStatus.class
+com/inventario/multisucursal/reports/ExcelReportWriter.class
 com/inventario/multisucursal/events/EventStreamController.class
 com/inventario/multisucursal/common/web/CorrelationIdFilter.class
+com/inventario/multisucursal/reports/ReportSheet$ColumnType.class
 com/inventario/multisucursal/users/UserController.class
 com/inventario/multisucursal/products/PriceListResponse.class
 com/inventario/multisucursal/products/ProductService.class
@@ -155,6 +159,8 @@ com/inventario/multisucursal/users/UserResponse.class
 com/inventario/multisucursal/products/ProductRepository.class
 com/inventario/multisucursal/inventory/StockAlertResponse.class
 com/inventario/multisucursal/transfers/TransferItem.class
+com/inventario/multisucursal/reports/ReportExportService.class
+com/inventario/multisucursal/reports/ExcelReportWriter$1.class
 com/inventario/multisucursal/sales/SaleStatus.class
 com/inventario/multisucursal/auth/JpaAuditingConfig.class
 com/inventario/multisucursal/suppliers/UpdateSupplierRequest.class
@@ -178,6 +184,7 @@ com/inventario/multisucursal/users/UserService.class
 com/inventario/multisucursal/products/UpdateProductRequest.class
 com/inventario/multisucursal/users/RoleCode.class
 com/inventario/multisucursal/reports/ReportController.class
+com/inventario/multisucursal/common/reports/ReportRangeValidator.class
 com/inventario/multisucursal/events/EventBroadcaster$Subscription.class
 com/inventario/multisucursal/transfers/ActiveTransferImpact.class
 com/inventario/multisucursal/branches/BranchController.class
@@ -194,6 +201,7 @@ com/inventario/multisucursal/users/DeactivateUserRequest.class
 com/inventario/multisucursal/sales/SaleReturnResponse$InventoryUpdate.class
 com/inventario/multisucursal/common/exception/ResourceConflictException.class
 com/inventario/multisucursal/inventory/StockAlertRow.class
+com/inventario/multisucursal/reports/ExportedFile.class
 com/inventario/multisucursal/logistics/RouteService.class
 com/inventario/multisucursal/common/exception/BusinessRuleViolationException.class
 com/inventario/multisucursal/sales/ProductDemand.class

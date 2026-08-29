@@ -28,6 +28,7 @@
 /app/src/main/java/com/inventario/multisucursal/common/exception/BusinessRuleViolationException.java
 /app/src/main/java/com/inventario/multisucursal/common/exception/ResourceConflictException.java
 /app/src/main/java/com/inventario/multisucursal/common/exception/ResourceNotFoundException.java
+/app/src/main/java/com/inventario/multisucursal/common/reports/ReportRangeValidator.java
 /app/src/main/java/com/inventario/multisucursal/common/web/ApiErrorBody.java
 /app/src/main/java/com/inventario/multisucursal/common/web/ApiErrorResponse.java
 /app/src/main/java/com/inventario/multisucursal/common/web/ApiErrorSupport.java
@@ -124,9 +125,13 @@
 /app/src/main/java/com/inventario/multisucursal/purchases/PurchaseReceiptResponse.java
 /app/src/main/java/com/inventario/multisucursal/purchases/PurchaseReceiptService.java
 /app/src/main/java/com/inventario/multisucursal/purchases/ReceiptItemRequest.java
+/app/src/main/java/com/inventario/multisucursal/reports/ExcelReportWriter.java
+/app/src/main/java/com/inventario/multisucursal/reports/ExportedFile.java
 /app/src/main/java/com/inventario/multisucursal/reports/LogisticsComplianceResponse.java
 /app/src/main/java/com/inventario/multisucursal/reports/LogisticsComplianceService.java
 /app/src/main/java/com/inventario/multisucursal/reports/ReportController.java
+/app/src/main/java/com/inventario/multisucursal/reports/ReportExportService.java
+/app/src/main/java/com/inventario/multisucursal/reports/ReportSheet.java
 /app/src/main/java/com/inventario/multisucursal/sales/CreateSaleItemRequest.java
 /app/src/main/java/com/inventario/multisucursal/sales/CreateSaleRequest.java
 /app/src/main/java/com/inventario/multisucursal/sales/ProductDemand.java

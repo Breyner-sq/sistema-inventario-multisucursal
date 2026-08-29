@@ -7,6 +7,7 @@ import com.inventario.multisucursal.common.exception.BadRequestException;
 import com.inventario.multisucursal.common.exception.BusinessRuleViolationException;
 import com.inventario.multisucursal.common.exception.ResourceConflictException;
 import com.inventario.multisucursal.common.exception.ResourceNotFoundException;
+import com.inventario.multisucursal.common.reports.ReportRangeValidator;
 import com.inventario.multisucursal.common.web.PageResponse;
 import com.inventario.multisucursal.events.DomainEvent;
 import com.inventario.multisucursal.events.DomainEventPublisher;
@@ -16,7 +17,9 @@ import com.inventario.multisucursal.products.ProductUnit;
 import com.inventario.multisucursal.products.ProductUnitRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -42,6 +46,8 @@ public class InventoryMovementService {
     private static final int MAX_RETRIES = 3;
     private static final Instant MIN_OCCURRED_AT = Instant.parse("1900-01-01T00:00:00Z");
     private static final Instant MAX_OCCURRED_AT = Instant.parse("9999-12-31T23:59:59Z");
+    /** BR-056: tope de filas de un reporte exportable — protege contra un rango sin acotar. */
+    private static final int MAX_EXPORT_ROWS = 5000;
 
     private final InventoryRepository inventoryRepository;
     private final InventoryMovementRepository movementRepository;
@@ -122,6 +128,24 @@ public class InventoryMovementService {
         Instant effectiveTo = dateTo != null ? dateTo : MAX_OCCURRED_AT;
         Page<InventoryMovement> page = movementRepository.search(branchId, productId, reason, effectiveFrom, effectiveTo, pageable);
         return PageResponse.from(page.map(InventoryMovementResponse::from));
+    }
+
+    /**
+     * BR-056: base del reporte exportable de movimientos. A diferencia de
+     * {@link #list}, {@code dateFrom}/{@code dateTo} son obligatorios (no se
+     * completan con límites amplios por defecto) y el resultado está acotado
+     * a {@value #MAX_EXPORT_ROWS} filas — una exportación materializa todo
+     * en memoria de una vez, a diferencia de una página de la UI.
+     */
+    public List<InventoryMovementResponse> listForExport(
+            Long branchId, Long productId, MovementReason reason, Instant dateFrom, Instant dateTo) {
+        ReportRangeValidator.requireValidRange(dateFrom, dateTo);
+        Long effectiveBranchId = authorizationService.resolveBranchFilter(branchId);
+
+        Pageable capped = PageRequest.of(0, MAX_EXPORT_ROWS + 1, Sort.by(Sort.Direction.DESC, "occurredAt"));
+        Page<InventoryMovement> page = movementRepository.search(effectiveBranchId, productId, reason, dateFrom, dateTo, capped);
+        ReportRangeValidator.requireWithinRowLimit(page.getTotalElements(), MAX_EXPORT_ROWS, "movimientos de inventario");
+        return page.getContent().stream().map(InventoryMovementResponse::from).toList();
     }
 
     private MovementReason resolveReason(MovementReason requested, MovementDirection direction) {
