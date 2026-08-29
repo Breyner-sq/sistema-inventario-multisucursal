@@ -4,7 +4,7 @@
 
 **Base de este documento:** `docs/DOMAIN_MODEL.md`, `docs/BUSINESS_RULES.md`, `docs/ARCHITECTURE.md` (secciones 6 y 7), `docs/USE_CASES.md`.
 
-**Fecha:** 2026-08-26. Este documento detalla, en pseudocódigo y diagramas de actividad, **cómo** se ejecutan las reglas ya aprobadas en `docs/BUSINESS_RULES.md`. No sustituye ese catálogo — lo hace operativo paso a paso. No se escribe código Java ni de ningún lenguaje real; el pseudocódigo es notación de diseño.
+**Fecha original:** 2026-08-26 (diseño en pseudocódigo, previo a la implementación). **Auditado y corregido el 2026-08-29 contra el código real** (`SaleService`, `PurchaseReceiptService`, `TransferService`, `InventoryMovementService`, `SaleReturnService`). Este documento ya no describe una intención de diseño: describe el comportamiento verificado del código a la fecha de la auditoría — si el código cambia, debe volver a auditarse, no asumirse vigente. Los cambios de fondo respecto a la versión de diseño están marcados **†** en cada flujo.
 
 ---
 
@@ -16,27 +16,30 @@ Se explican una sola vez aquí para no repetirlos en cada flujo; cada flujo solo
 
 No todas las operaciones críticas se protegen igual — depende de si la operación es una **transición de estado de un recurso ya existente** o la **creación de un nuevo registro**:
 
-- **Categoría 1 — Transición de estado, de un solo uso (state-guard):** aprobar/rechazar una transferencia, despachar, confirmar recepción completa/parcial, cerrar tras tratamiento. Se protege con un `UPDATE ... WHERE status = <estado_esperado>` (comparación-y-escritura atómica a nivel de SQL). Si la fila ya cambió de estado (por la propia petición procesada antes, o por un reintento HTTP concurrente), el `UPDATE` afecta cero filas y la aplicación responde `409` — **no requiere una clave de idempotencia enviada por el cliente**, porque el propio estado del recurso es la guarda.
-- **Categoría 2 — Creación o evento repetible (idempotency key):** registrar una venta, confirmar una recepción de compra (que admite varias recepciones parciales legítimas sobre la misma orden) y un ajuste manual de inventario. Aquí el estado del recurso **no** distingue por sí solo "esta es la siguiente operación legítima" de "esto es un reintento accidental de la anterior" — se requiere que el cliente envíe una clave de idempotencia (`idempotency_key`, generada una vez por acción de usuario, p. ej. al pulsar el botón) y que el servidor la persista con una restricción `UNIQUE`, devolviendo el resultado ya creado si la clave se repite, en vez de aplicar el efecto dos veces.
+- **Categoría 1 — Transición de estado, de un solo uso (state-guard):** aprobar/rechazar una transferencia, despachar, confirmar recepción completa/parcial, cerrar tras tratamiento. Se protege con un `UPDATE ... WHERE status = <estado_esperado>` (comparación-y-escritura atómica a nivel de SQL). Si la fila ya cambió de estado, el `UPDATE` afecta cero filas y la aplicación responde `409` — no requiere una clave de idempotencia enviada por el cliente.
+- **Categoría 2 — Creación o evento repetible (idempotency key):** registrar una venta, confirmar una recepción de compra, un ajuste manual de inventario, y una devolución de venta. Aquí el estado del recurso no distingue por sí solo la siguiente operación legítima de un reintento accidental — se requiere `idempotency_key` persistida con `UNIQUE`.
+- **† Verificado 2026-08-29 — no todas las operaciones de categoría 2 tienen la protección realmente implementada.** Ver flujo G: el ajuste manual de inventario está clasificado como categoría 2 en este documento, pero el código **no implementa ninguna clave de idempotencia** para él — es un gap real, no una decisión de diseño. Ver también la nota sobre `PurchaseOrderService.create` al final de la sección 4.
 
 ### 1.2 Concurrencia: bloqueo optimista sobre agregados numéricos
 
-Toda fila que se **lee, se modifica en función de su valor actual, y se vuelve a escribir** (no solo se transiciona de estado) usa bloqueo optimista mediante una columna `version`: `Inventory.quantity_on_hand`/`average_unit_cost` y, según se identifica en la sección 5, `PurchaseOrderItem.quantity_received`. El patrón es siempre:
+Toda fila que se **lee, se modifica en función de su valor actual, y se vuelve a escribir** usa bloqueo optimista mediante una columna `version`. Confirmado en código sobre: `Inventory.quantity_on_hand`/`average_unit_cost`, `PurchaseOrderItem.quantity_received`, y (hallazgo nuevo, no anticipado por el diseño original) `SaleItem.quantity_returned` (flujo H). El patrón es siempre:
 
 ```
 leer fila y su version actual (v)
 calcular nuevo valor
 UPDATE tabla SET valor = nuevo_valor, version = v + 1 WHERE id = ? AND version = v
 SI filas_afectadas = 0:
-    reintentar desde "leer fila" (máximo 3 intentos)
+    reintentar desde "leer fila" (máximo 3 intentos — MAX_RETRIES=3, constante verificada en cada Service)
     SI se agotan los reintentos: error 409 CONFLICTO_CONCURRENCIA
 ```
 
-Tres intentos con un backoff aleatorio corto (decenas de milisegundos) es suficiente para el volumen de esta prueba (`docs/PROJECT_BRIEF.md`, RNF-004); no se introduce una cola de reintentos ni un mecanismo más sofisticado sin evidencia de que la contención real lo requiera.
+### 1.3 † Guarda de escritura única por línea (patrón real, no contemplado en el diseño original)
 
-### 1.3 Límite transaccional
+Descubierto al auditar `TransferService`: varias columnas de `TransferItem` (`quantity_approved`, `quantity_shipped`, `quantity_received`, `discrepancy_treatment`) se fijan **exactamente una vez**, protegidas con `UPDATE ... WHERE columna IS NULL` — un tercer patrón de concurrencia, distinto tanto del bloqueo optimista (1.2, sobre agregados que cambian varias veces) como de la guarda de estado de categoría 1 (1.1, sobre el documento completo). Es una guarda de categoría 1 aplicada **a nivel de línea en vez de a nivel de documento**, y es precisamente lo que permite que un documento con varias líneas (una transferencia con varios productos) se procese línea por línea, en solicitudes separadas y potencialmente concurrentes, sin que una línea bloquee o duplique el efecto de otra. Este patrón aparece en los flujos C2, D, E+F1 y F2.
 
-Cada flujo se ejecuta en **una única transacción de base de datos** que cubre: la(s) validación(es) de negocio, la escritura del agregado (`Inventory`, `PurchaseOrderItem`, etc.), la inserción del `InventoryMovement` (cuando aplica) y el cambio de estado del documento (cuando aplica). Ningún flujo hace `commit` parcial entre esos pasos. Cualquier evento posterior (SSE, notificación) ocurre **después** del `commit`, nunca dentro de la transacción (`docs/ARCHITECTURE.md`, sección 7).
+### 1.4 Límite transaccional
+
+Cada flujo se ejecuta en **una única transacción de base de datos**. Ningún flujo hace `commit` parcial entre pasos. Cualquier evento posterior (SSE, notificación) ocurre **después** del `commit`, nunca dentro de la transacción (`docs/ARCHITECTURE.md`, sección 7).
 
 ---
 
@@ -46,83 +49,35 @@ Cada flujo se ejecuta en **una única transacción de base de datos** que cubre:
 
 | Campo | Detalle |
 |---|---|
+| **Servicio real** | `SaleService.confirmSale` |
 | **Actor** | Operador de inventario (o Gerente/Admin) de la sucursal donde se vende. |
-| **Precondiciones** | Usuario autenticado y perteneciente a la sucursal; producto(s) activos; existe una lista de precios vigente aplicable. |
-| **Lecturas necesarias** | `Product`, `Price` vigente por producto, `Inventory(producto, sucursal)` con su `version`. |
-| **Validaciones** | Cantidad > 0 por línea (BR-012); descuento en rango válido (BR-019); stock disponible ≥ cantidad (BR-002); rol/sucursal autorizados (BR-018). |
-| **Cambios de estado** | Ninguno intermedio — la venta se crea directamente en `CONFIRMED` (no existe un estado "borrador" en el alcance actual). |
+| **Cambios de estado** | Ninguno intermedio — la venta se crea directamente en `CONFIRMED`. |
 | **Cambios de stock** | `Inventory.quantity_on_hand -= cantidad`, por cada línea, en la sucursal del vendedor. |
 | **InventoryMovement generado** | Uno por línea: `direction=RETIRO`, `reason=VENTA`, `sale_item_id` poblado. |
-| **Límites de la transacción** | Todas las líneas de la venta + todos sus movimientos + la fila `Sale` en una única transacción; si una línea falla, toda la venta se revierte (no se permite una venta con algunas líneas confirmadas y otras no). |
-| **Locking/concurrencia** | Optimista sobre `Inventory.version` por cada producto afectado (sección 1.2). |
-| **Idempotencia/reintentos** | Categoría 2 (creación) — `idempotency_key` en la solicitud de venta, `UNIQUE` en `Sale.client_reference_id`. |
-| **Errores posibles** | 400 (payload inválido), 403 `SUCURSAL_NO_AUTORIZADA`, 422 `CANTIDAD_INVALIDA` / `STOCK_INSUFICIENTE` / `DESCUENTO_FUERA_DE_RANGO`, 409 `CONFLICTO_CONCURRENCIA` (tras agotar reintentos). |
-| **Eventos posteriores al commit** | Evento SSE de inventario actualizado (sucursal/producto); evento SSE de alerta de stock mínimo si se cruzó el umbral (BR-010). |
-| **Pruebas críticas** | Ver escenario especial 3.1 (dos operadores vendiendo las últimas unidades); reintento HTTP con la misma `idempotency_key` no crea una segunda venta; rollback si la segunda línea de una venta de dos líneas falla. |
-
-**Pseudocódigo:**
-
-```
-FUNCTION registrarVenta(sucursalId, usuarioId, lineas[], idempotencyKey):
-  BEGIN TRANSACTION
-    ventaExistente = SELECT Sale WHERE client_reference_id = idempotencyKey
-    IF ventaExistente EXISTS:
-        COMMIT (no-op) ; RETURN ventaExistente        // replay idempotente
-
-    validar rol(usuarioId) y sucursal(usuarioId) == sucursalId     // BR-018
-
-    total = 0
-    FOR EACH linea IN lineas:
-        producto = obtener Product(linea.productId)                // 404 si no existe
-        precio   = obtener Price vigente(producto, listaPrecios)    // 404/422 si no hay precio vigente
-        IF linea.cantidad <= 0: RAISE 422 CANTIDAD_INVALIDA          // BR-012
-        IF descuento fuera de [0, subtotal]: RAISE 422 DESCUENTO_FUERA_DE_RANGO  // BR-019
-
-        intentos = 0
-        REPEAT:
-            inventario = SELECT Inventory WHERE product=producto AND branch=sucursalId
-            IF inventario.quantity_on_hand < linea.cantidad:
-                RAISE 422 STOCK_INSUFICIENTE                        // BR-002
-            filas = UPDATE Inventory
-                      SET quantity_on_hand = quantity_on_hand - linea.cantidad,
-                          version = inventario.version + 1
-                      WHERE id = inventario.id AND version = inventario.version
-            IF filas == 0:
-                intentos += 1
-                IF intentos >= 3: RAISE 409 CONFLICTO_CONCURRENCIA
-                CONTINUE REPEAT (releer inventario)
-        UNTIL filas == 1
-
-        crear InventoryMovement(RETIRO, VENTA, linea.cantidad, usuarioId, saleItemId, occurred_at=now())
-        IF inventario.quantity_on_hand - linea.cantidad <= inventario.minimum_stock:
-            generarOActivarStockAlert(inventario.id)                // BR-010
-        total += linea.cantidad * precio.unit_price - descuento
-
-    crear Sale(status=CONFIRMED, total, client_reference_id=idempotencyKey)
-  COMMIT
-
-  // fuera de la transacción:
-  publicarEventoSSE("inventario.actualizado", sucursalId, productosAfectados)
-  SI se generaron alertas: publicarEventoSSE("alerta.stock_minimo", ...)
-  RETURN ventaCreada
-```
+| **Locking/concurrencia** | Optimista sobre `Inventory.version` por cada producto afectado (MAX_RETRIES=3). |
+| **Idempotencia** | Categoría 2 — `Sale.clientReferenceId`, `UNIQUE`; comprobada **antes** de cualquier otra validación, incluida la autorización por sucursal. |
+| **† Errores reales** | `CANTIDAD_INVALIDA`, `STOCK_INSUFICIENTE`, `CONFLICTO_CONCURRENCIA`, `SUCURSAL_NO_ENCONTRADA`, `SUCURSAL_INACTIVA`, `PRODUCTO_NO_ENCONTRADO`, `PRODUCTO_INACTIVO`, `LISTA_PRECIOS_NO_ENCONTRADA`, `LISTA_PRECIOS_INACTIVA`, `PRECIO_NO_ENCONTRADO`, `UNIDAD_NO_SOPORTADA`, `IDEMPOTENCY_KEY_REQUERIDO`. **`DESCUENTO_FUERA_DE_RANGO` no existe** — el código no valida el rango del descuento en absoluto (gap real, no un error de este documento). La autorización por sucursal la resuelve `AuthorizationService` con `BranchAccessDeniedException` (403), no un código de negocio propio como `SUCURSAL_NO_AUTORIZADA`. |
+| **Eventos posteriores al commit** | SSE de inventario actualizado; SSE de alerta de stock mínimo si se cruzó el umbral. |
 
 **Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: registrar venta]) --> CheckIdemp{"¿idempotency_key<br/>ya procesada?"}
+    Start([Inicio: confirmar venta]) --> CheckIdemp{"¿Sale.clientReferenceId<br/>ya existe?"}
     CheckIdemp -- Sí --> ReturnExisting[Retornar venta existente] --> End([Fin])
-    CheckIdemp -- No --> ValidarRol{"¿Rol y sucursal<br/>autorizados?"}
-    ValidarRol -- No --> Err403[403 SUCURSAL_NO_AUTORIZADA] --> End
-    ValidarRol -- Sí --> LoopLineas[Tomar siguiente línea]
-    LoopLineas --> ValidarCantidad{"¿cantidad > 0?"}
-    ValidarCantidad -- No --> Err422a[422 CANTIDAD_INVALIDA] --> Rollback[ROLLBACK] --> End
+    CheckIdemp -- No --> CheckAuth{"¿usuario pertenece<br/>a la sucursal?"}
+    CheckAuth -- No --> Err403[403 BranchAccessDenied] --> End
+    CheckAuth -- Sí --> LoopLineas[Tomar siguiente línea]
+    LoopLineas --> ResolverDatos["Resolver sucursal, producto,<br/>lista de precios, precio, unidad"]
+    ResolverDatos --> ErrDatos{"¿alguno no existe<br/>o está inactivo?"}
+    ErrDatos -- Sí --> Err404["404/422 SUCURSAL_INACTIVA,<br/>PRODUCTO_INACTIVO,<br/>PRECIO_NO_ENCONTRADO..."] --> Rollback[ROLLBACK] --> End
+    ErrDatos -- No --> ValidarCantidad{"¿cantidad > 0?"}
+    ValidarCantidad -- No --> Err422a[422 CANTIDAD_INVALIDA] --> Rollback
     ValidarCantidad -- Sí --> LeerInventario[Leer Inventory + version]
     LeerInventario --> ValidarStock{"¿stock ≥ cantidad?"}
     ValidarStock -- No --> Err422b[422 STOCK_INSUFICIENTE] --> Rollback
     ValidarStock -- Sí --> ActualizarStock["UPDATE Inventory<br/>WHERE version = v"]
-    ActualizarStock --> Afectadas{"¿0 filas<br/>afectadas?"}
+    ActualizarStock --> Afectadas{"¿0 filas afectadas?"}
     Afectadas -- Sí --> Reintentar{"¿reintentos < 3?"}
     Reintentar -- Sí --> LeerInventario
     Reintentar -- No --> Err409[409 CONFLICTO_CONCURRENCIA] --> Rollback
@@ -134,9 +89,10 @@ flowchart TD
     MasLineas -- Sí --> LoopLineas
     MasLineas -- No --> CrearVenta[Crear Sale CONFIRMED]
     CrearVenta --> Commit[["COMMIT"]]
-    Commit --> Publicar[Publicar eventos SSE]
-    Publicar --> End
+    Commit --> Publicar[Publicar eventos SSE] --> End
 ```
+
+Versión interactiva con el mismo contenido (tema visual compartido con los demás diagramas del proyecto): [artifact de diagramas de flujo](https://claude.ai/code/artifact/ce3f0f4c-0fb7-4506-9a0a-422ec9f9cd36).
 
 ---
 
@@ -144,158 +100,110 @@ flowchart TD
 
 | Campo | Detalle |
 |---|---|
+| **Servicio real** | `PurchaseReceiptService.receive` |
 | **Actor** | Operador de inventario de la sucursal receptora. |
-| **Precondiciones** | `PurchaseOrder.status IN (CREATED, PARTIALLY_RECEIVED)`; usuario pertenece a la sucursal receptora. |
-| **Lecturas necesarias** | `PurchaseOrder` + `PurchaseOrderItem` (cantidad pendiente, `unit_price`), `Inventory(producto, sucursal)` con `version`. |
-| **Validaciones** | Cantidad a recibir > 0 (BR-012); cantidad a recibir ≤ pendiente = `quantity_ordered - quantity_received` (BR-003); orden no cerrada (`RECEIVED`/`CANCELLED`). |
-| **Cambios de estado** | `PurchaseOrder.status → PARTIALLY_RECEIVED` (si queda pendiente) o `→ RECEIVED` (si se completa). |
-| **Cambios de stock** | `Inventory.quantity_on_hand += cantidad recibida` (convertida a unidad base); `Inventory.average_unit_cost` recalculado (BR-004). |
+| **Cambios de estado** | `PurchaseOrder.status → PARTIALLY_RECEIVED` o `→ RECEIVED`, evaluado tras procesar todas las líneas de la solicitud. |
+| **Cambios de stock** | `Inventory.quantity_on_hand += cantidad recibida` (convertida a unidad base); `average_unit_cost` recalculado (costo promedio ponderado). |
 | **InventoryMovement generado** | `direction=INGRESO`, `reason=COMPRA`, `purchase_order_item_id` poblado. |
-| **Límites de la transacción** | Actualización de `PurchaseOrderItem.quantity_received`, `Inventory` (cantidad + costo) y `PurchaseOrder.status`, junto con el `InventoryMovement`, en una única transacción (BR-016). |
-| **Locking/concurrencia** | Optimista sobre `Inventory.version` **y** sobre `PurchaseOrderItem.version` (ver sección 5 — columna adicional identificada en este análisis). Dos recepciones parciales concurrentes sobre la misma línea deben serializarse por esta segunda versión, no solo por la de `Inventory`. |
-| **Idempotencia/reintentos** | **Categoría 2** (creación repetible) — a diferencia de las transiciones de un solo uso, una orden `PARTIALLY_RECEIVED` sigue siendo un estado válido para recibir de nuevo, por lo que el estado por sí solo no distingue "la siguiente recepción legítima" de "un reintento accidental de la anterior". Requiere `idempotency_key` por cada solicitud de recepción, con `UNIQUE` sobre el `InventoryMovement` resultante. |
-| **Errores posibles** | 422 `CANTIDAD_RECEPCION_EXCEDE_ORDENADO`, 409 `ORDEN_YA_RECIBIDA` (si `status = RECEIVED`/`CANCELLED`), 409 `CONFLICTO_CONCURRENCIA`. |
-| **Eventos posteriores al commit** | SSE de inventario actualizado; notificación de orden completada si `status → RECEIVED`. |
-| **Pruebas críticas** | Doble confirmación por reintento HTTP de la **misma** recepción parcial (ver escenario 3.3) no debe duplicar el ingreso; dos recepciones parciales sucesivas legítimas sí deben aplicarse ambas. |
-
-**Pseudocódigo:**
-
-```
-FUNCTION recibirCompra(purchaseOrderItemId, cantidadRecibida, precioUnitario, usuarioId, idempotencyKey):
-  BEGIN TRANSACTION
-    movimientoExistente = SELECT InventoryMovement WHERE idempotency_key = idempotencyKey
-    IF movimientoExistente EXISTS:
-        COMMIT (no-op) ; RETURN movimientoExistente
-
-    item = SELECT PurchaseOrderItem WHERE id = purchaseOrderItemId
-    orden = SELECT PurchaseOrder WHERE id = item.purchase_order_id
-    IF orden.status IN (RECEIVED, CANCELLED): RAISE 409 ORDEN_YA_RECIBIDA
-    pendiente = item.quantity_ordered - item.quantity_received
-    IF cantidadRecibida <= 0: RAISE 422 CANTIDAD_INVALIDA
-    IF cantidadRecibida > pendiente: RAISE 422 CANTIDAD_RECEPCION_EXCEDE_ORDENADO
-
-    filasItem = UPDATE PurchaseOrderItem
-                  SET quantity_received = quantity_received + cantidadRecibida,
-                      version = item.version + 1
-                  WHERE id = item.id AND version = item.version
-    IF filasItem == 0: reintentar (máx. 3) o RAISE 409 CONFLICTO_CONCURRENCIA
-
-    inventario = SELECT Inventory WHERE product=item.product_id AND branch=orden.branch_id
-    nuevoCosto = (inventario.quantity_on_hand * inventario.average_unit_cost
-                  + cantidadRecibida * precioUnitario)
-                 / (inventario.quantity_on_hand + cantidadRecibida)
-    filasInv = UPDATE Inventory
-                 SET quantity_on_hand = quantity_on_hand + cantidadRecibida,
-                     average_unit_cost = nuevoCosto,
-                     version = inventario.version + 1
-                 WHERE id = inventario.id AND version = inventario.version
-    IF filasInv == 0: reintentar (máx. 3) o RAISE 409 CONFLICTO_CONCURRENCIA
-
-    crear InventoryMovement(INGRESO, COMPRA, cantidadRecibida, usuarioId,
-                             purchase_order_item_id=item.id, idempotency_key=idempotencyKey)
-
-    IF item.quantity_received + cantidadRecibida >= item.quantity_ordered para TODAS las líneas de la orden:
-        UPDATE PurchaseOrder SET status = RECEIVED WHERE id = orden.id
-    ELSE:
-        UPDATE PurchaseOrder SET status = PARTIALLY_RECEIVED WHERE id = orden.id
-  COMMIT
-
-  publicarEventoSSE("inventario.actualizado", orden.branch_id, item.product_id)
-  RETURN movimiento creado
-```
+| **Locking/concurrencia** | Optimista sobre `Inventory.version` **y** sobre `PurchaseOrderItem.version` (MAX_RETRIES=3 en ambos). |
+| **† Idempotencia — clave derivada, no la clave bruta del cliente** | La clave real que protege cada `InventoryMovement` es `idempotency_key_del_cliente + ":" + purchaseOrderItemId` — no el `Idempotency-Key` del header tal cual. Esto permite reintentar la solicitud completa (que puede traer varias líneas) sin reaplicar ninguna línea ya procesada, aunque otras líneas de la misma solicitud sí sean nuevas. |
+| **† Cierre de la orden — no es un `UPDATE` atómico** | A diferencia de las transiciones de `Transfer` (categoría 1, sección 1.1), el cambio de `PurchaseOrder.status` es un `purchaseOrderRepository.save(order)` normal, no `UPDATE ... WHERE status = X`. No representa un riesgo real porque cada línea ya está protegida por su propio `version`, pero la mecánica es distinta a la de transferencias. |
+| **Errores reales** | `CANTIDAD_INVALIDA`, `CANTIDAD_RECEPCION_EXCEDE_ORDENADO`, `ORDEN_YA_RECIBIDA`, `CONFLICTO_CONCURRENCIA`, `ORDEN_COMPRA_NO_ENCONTRADA`, `LINEA_ORDEN_NO_ENCONTRADA`, `UNIDAD_NO_SOPORTADA`, `IDEMPOTENCY_KEY_REQUERIDO`. |
+| **Orden verificado** | La comprobación de idempotencia (por línea) ocurre **antes** que la comprobación de estado de la orden — confirmado explícitamente en el código, comentario de clase de `PurchaseReceiptService`. |
 
 **Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: recibir compra]) --> CheckIdemp{"¿idempotency_key<br/>ya usada?"}
-    CheckIdemp -- Sí --> Return[Retornar movimiento existente] --> End([Fin])
+    Start([Inicio: recibir línea de compra]) --> DerivarClave["Derivar clave = Idempotency-Key + ':' + purchaseOrderItemId"]
+    DerivarClave --> CheckIdemp{"¿InventoryMovement con<br/>esa clave ya existe?"}
+    CheckIdemp -- Sí --> Return[Retornar movimiento existente] --> SigLinea{"¿más líneas<br/>en la solicitud?"}
     CheckIdemp -- No --> CheckEstado{"¿orden RECEIVED<br/>o CANCELLED?"}
-    CheckEstado -- Sí --> Err409a[409 ORDEN_YA_RECIBIDA] --> End
-    CheckEstado -- No --> ValidarCantidad{"¿0 < cantidad ≤ pendiente?"}
-    ValidarCantidad -- No --> Err422[422 CANTIDAD_INVALIDA] --> End
+    CheckEstado -- Sí --> Err409a[409 ORDEN_YA_RECIBIDA] --> End([Fin])
+    CheckEstado -- No --> ValidarCantidad{"¿cantidad > 0?"}
+    ValidarCantidad -- No --> Err422a[422 CANTIDAD_INVALIDA] --> End
     ValidarCantidad -- Sí --> UpdateItem["UPDATE PurchaseOrderItem<br/>WHERE version = v"]
-    UpdateItem --> ItemOk{"¿0 filas?"}
+    UpdateItem --> PendienteOk{"¿cantidad ≤ pendiente?"}
+    PendienteOk -- No --> Err422b[422 CANTIDAD_RECEPCION_EXCEDE_ORDENADO] --> End
+    PendienteOk -- Sí --> ItemOk{"¿0 filas afectadas?"}
     ItemOk -- Sí --> ReintentarItem{"¿reintentos < 3?"}
     ReintentarItem -- Sí --> UpdateItem
     ReintentarItem -- No --> Err409b[409 CONFLICTO_CONCURRENCIA] --> End
-    ItemOk -- No --> CalcularCosto[Calcular nuevo average_unit_cost]
+    ItemOk -- No --> ResolverFactor[Resolver factor de conversión de unidad]
+    ResolverFactor --> CalcularCosto[Calcular nuevo average_unit_cost ponderado]
     CalcularCosto --> UpdateInv["UPDATE Inventory<br/>WHERE version = v"]
-    UpdateInv --> InvOk{"¿0 filas?"}
+    UpdateInv --> InvOk{"¿0 filas afectadas?"}
     InvOk -- Sí --> ReintentarInv{"¿reintentos < 3?"}
     ReintentarInv -- Sí --> UpdateInv
     ReintentarInv -- No --> Err409b
-    InvOk -- No --> CrearMov[Crear InventoryMovement COMPRA]
-    CrearMov --> Completa{"¿queda pendiente<br/>en la orden?"}
-    Completa -- No --> EstadoRecibida[PurchaseOrder → RECEIVED]
-    Completa -- Sí --> EstadoParcial[PurchaseOrder → PARTIALLY_RECEIVED]
-    EstadoRecibida --> Commit[["COMMIT"]]
-    EstadoParcial --> Commit
+    InvOk -- No --> CrearMov["Crear InventoryMovement<br/>(idempotency_key derivada)"]
+    CrearMov --> SigLinea
+    SigLinea -- Sí --> DerivarClave
+    SigLinea -- No --> Completa{"¿TODAS las líneas<br/>de la orden completas?"}
+    Completa -- Sí --> EstadoRecibida["order.status = RECEIVED"]
+    Completa -- No --> EstadoParcial["order.status = PARTIALLY_RECEIVED"]
+    EstadoRecibida --> Guardar["purchaseOrderRepository.save(order)<br/>(save simple, no UPDATE atómico)"]
+    EstadoParcial --> Guardar
+    Guardar --> Commit[["COMMIT"]]
     Commit --> Publicar[Publicar SSE] --> End
 ```
 
 ---
 
-### C. Solicitud y aprobación de transferencia
+### C1+C2. Solicitud y aprobación de transferencia
 
-Dos sub-pasos con actores y transacciones distintas.
-
-#### C1 — Solicitud
+#### C1 — Solicitud (`TransferService.request`)
 
 | Campo | Detalle |
 |---|---|
-| **Actor** | Operador, Gerente o Admin (representando a la sucursal destino). |
-| **Precondiciones** | `origin_branch_id ≠ destination_branch_id`; producto activo. |
-| **Lecturas necesarias** | `Product`, `Branch` (ambas). |
-| **Validaciones** | Origen ≠ destino; cantidad solicitada > 0 (BR-012). |
 | **Cambios de estado** | Se crea `Transfer` en `REQUESTED`. |
-| **Cambios de stock** | Ninguno. |
-| **InventoryMovement** | Ninguno. |
-| **Límites de la transacción** | Creación de `Transfer` + sus `TransferItem` en una sola transacción. |
-| **Locking/concurrencia** | No aplica (no se toca `Inventory`). |
-| **Idempotencia** | Categoría 2 — `idempotency_key` para evitar solicitudes duplicadas por doble clic. |
-| **Errores posibles** | 422 `ORIGEN_IGUAL_DESTINO`, 422 `CANTIDAD_INVALIDA`, 400. |
-| **Eventos posteriores** | SSE a la sucursal origen: "nueva solicitud pendiente". |
-| **Pruebas críticas** | Doble envío con la misma `idempotency_key` no crea dos solicitudes. |
+| **Idempotencia** | Categoría 2 — `Transfer.clientReferenceId`, `UNIQUE`, comprobada primero. |
+| **† Validaciones no documentadas originalmente** | Ambas sucursales deben existir y estar activas; cada producto debe existir y estar activo; **`PRODUCTO_DUPLICADO_EN_TRANSFERENCIA`** — no se puede solicitar el mismo producto dos veces en la misma solicitud (regla de negocio completa, ausente del diseño original). |
+| **Detalle no documentado originalmente** | `Transfer.route_id` se resuelve automáticamente por par de sucursales (coincide con `ARCHITECTURE.md`, pero el diseño de flujos nunca lo mencionó). |
+| **Errores reales** | `ORIGEN_IGUAL_DESTINO`, `CANTIDAD_INVALIDA`, `SUCURSAL_NO_ENCONTRADA`, `SUCURSAL_INACTIVA`, `PRODUCTO_NO_ENCONTRADO`, `PRODUCTO_INACTIVO`, `PRODUCTO_DUPLICADO_EN_TRANSFERENCIA`. |
 
-#### C2 — Aprobación (o rechazo)
+#### C2 — Aprobación / rechazo (`TransferService.approve` / `reject`)
 
 | Campo | Detalle |
 |---|---|
-| **Actor** | Gerente de la sucursal origen (o Admin, alcance global — supuesto pendiente ya señalado en `docs/USE_CASES.md`). |
-| **Precondiciones** | `Transfer.status = REQUESTED`; usuario pertenece a la sucursal origen. |
-| **Lecturas necesarias** | `Transfer` + `TransferItem`; `Inventory(producto, sucursal origen)` — lectura simple, sin necesidad de bloqueo porque este paso **no escribe** `Inventory` (ver nota de diseño abajo). |
-| **Validaciones** | Estado actual = `REQUESTED` (BR-020); stock disponible ≥ cantidad a aprobar (BR-005); rol/sucursal (BR-018). |
-| **Cambios de estado** | `REQUESTED → APPROVED` (con `quantity_approved` fijada, igual o menor a la solicitada) o `REQUESTED → REJECTED`. |
-| **Cambios de stock** | **Ninguno todavía** — decisión de diseño: aprobar no reserva/bloquea stock físicamente, solo confirma intención. El stock se descuenta recién al despachar (flujo D), donde se revalida (BR-013). |
-| **InventoryMovement** | Ninguno en este paso. |
-| **Límites de la transacción** | Update de `Transfer.status` + `TransferItem.quantity_approved`, atómico. |
-| **Locking/concurrencia** | Categoría 1 — `UPDATE Transfer SET status='APPROVED' WHERE status='REQUESTED'`. |
-| **Idempotencia** | Categoría 1 — no requiere `idempotency_key`; una segunda aprobación ve `status ≠ REQUESTED` y falla con 409. |
-| **Errores posibles** | 409 `TRANSICION_INVALIDA`, 422 `STOCK_INSUFICIENTE_PARA_TRANSFERENCIA`, 403. |
-| **Eventos posteriores** | SSE al solicitante: aprobada/rechazada. |
-| **Pruebas críticas** | Dos clics casi simultáneos del Gerente sobre "aprobar" — solo uno aplica, el otro recibe 409 (no un doble efecto). |
+| **Cambios de estado** | `REQUESTED → APPROVED` (con `quantity_approved` por línea) o `REQUESTED → REJECTED`. |
+| **† Orden real, distinto del pseudocódigo original** | El diseño original ponía la guarda atómica `UPDATE ... WHERE status='REQUESTED'` como primer paso. El código real hace: (1) chequeo de estado **en memoria** (`requireStatus`, no atómico) → (2) validaciones de negocio 422 (`APROBACION_INCOMPLETA`, `CANTIDAD_APROBADA_EXCEDE_SOLICITADO`, stock disponible) → (3) **recién ahí** el `UPDATE Transfer ... WHERE status='REQUESTED'` atómico real → (4) un **segundo nivel de guarda atómica por línea**, `UPDATE TransferItem SET quantity_approved ... WHERE quantity_approved IS NULL` (sección 1.3). |
+| **† Reglas de negocio no documentadas originalmente** | `APROBACION_INCOMPLETA` — hay que aprobar todas las líneas de la solicitud juntas, no una por una; `CANTIDAD_APROBADA_EXCEDE_SOLICITADO`. |
+| **Errores reales** | `TRANSICION_INVALIDA`, `STOCK_INSUFICIENTE_PARA_TRANSFERENCIA`, `CANTIDAD_INVALIDA`, `CANTIDAD_APROBADA_EXCEDE_SOLICITADO`, `APROBACION_INCOMPLETA`. |
 
-**Nota de diseño (por qué la aprobación no reserva stock):** reservar stock en el momento de aprobar exigiría un tercer estado de "cantidad comprometida" en `Inventory`, distinto de `quantity_on_hand` disponible para venta — no lo pide ningún requisito (`docs/PROJECT_BRIEF.md`) y añadiría complejidad no justificada. La consecuencia aceptada es que una aprobación puede quedar sin poder despacharse si el stock se consume después por una venta — cubierto explícitamente por BR-013 y el escenario 3.2 de este documento.
+**Nota de diseño (vigente):** aprobar no reserva/bloquea stock físicamente — el stock se descuenta recién al despachar (flujo D), donde se revalida. La consecuencia aceptada (una aprobación puede quedar sin poder despacharse si el stock se consume después) sigue siendo la misma que en el diseño original — ver escenario 3.2.
 
-**Diagrama de actividad (C1 + C2):**
+**Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: solicitar transferencia]) --> ValidarOD{"¿origen ≠ destino?"}
-    ValidarOD -- No --> Err422o[422 ORIGEN_IGUAL_DESTINO] --> End1([Fin])
-    ValidarOD -- Sí --> CrearSolicitud[Crear Transfer REQUESTED] --> CommitC1[["COMMIT"]]
+    Start([Inicio: solicitar transferencia]) --> CheckIdempC1{"¿clientReferenceId<br/>ya existe?"}
+    CheckIdempC1 -- Sí --> ReturnC1[Retornar solicitud existente] --> End1([Fin])
+    CheckIdempC1 -- No --> ValidarOD{"¿origen ≠ destino?"}
+    ValidarOD -- No --> Err422o[422 ORIGEN_IGUAL_DESTINO] --> End1
+    ValidarOD -- Sí --> ResolverSucursales["Resolver ambas sucursales (activas)"]
+    ResolverSucursales --> ValidarLineas["Resolver productos activos;<br/>rechazar duplicados"]
+    ValidarLineas --> ErrLineas{"¿producto inactivo o<br/>duplicado en la solicitud?"}
+    ErrLineas -- Sí --> Err422p["422 PRODUCTO_INACTIVO /<br/>PRODUCTO_DUPLICADO_EN_TRANSFERENCIA"] --> End1
+    ErrLineas -- No --> ResolverRuta["Resolver route_id automáticamente<br/>por par de sucursales"]
+    ResolverRuta --> CrearSolicitud["Crear Transfer REQUESTED<br/>+ TransferItem"]
+    CrearSolicitud --> CommitC1[["COMMIT"]]
     CommitC1 --> NotifOrigen[SSE a sucursal origen] --> End1
 
     NotifOrigen -.-> StartC2([Gerente revisa solicitud])
-    StartC2 --> CheckEstadoC2{"¿status = REQUESTED?"}
+    StartC2 --> CheckEstadoC2{"¿status == REQUESTED?<br/>(chequeo en memoria)"}
     CheckEstadoC2 -- No --> Err409c[409 TRANSICION_INVALIDA] --> End2([Fin])
-    CheckEstadoC2 -- Sí --> ValidarStockC2{"¿stock ≥ cantidad<br/>a aprobar?"}
+    CheckEstadoC2 -- Sí --> CheckCompleta{"¿todas las líneas<br/>incluidas en la aprobación?"}
+    CheckCompleta -- No --> Err422inc[422 APROBACION_INCOMPLETA] --> End2
+    CheckCompleta -- Sí --> ValidarCantAprob{"¿0 &lt; aprobada ≤ solicitada<br/>por cada línea?"}
+    ValidarCantAprob -- No --> Err422ca[422 CANTIDAD_APROBADA_EXCEDE_SOLICITADO] --> End2
+    ValidarCantAprob -- Sí --> ValidarStockC2{"¿stock ≥ cantidad<br/>aprobada, por línea?"}
     ValidarStockC2 -- No --> Err422s[422 STOCK_INSUFICIENTE_PARA_TRANSFERENCIA] --> End2
-    ValidarStockC2 -- Sí --> UpdateAprobar["UPDATE Transfer SET status=APPROVED<br/>WHERE status=REQUESTED"]
+    ValidarStockC2 -- Sí --> UpdateAprobar["UPDATE Transfer SET status=APPROVED<br/>WHERE status=REQUESTED (guarda real)"]
     UpdateAprobar --> FilasC2{"¿0 filas?"}
-    FilasC2 -- Sí --> Err409d[409 TRANSICION_INVALIDA] --> End2
-    FilasC2 -- No --> CommitC2[["COMMIT"]]
+    FilasC2 -- Sí --> Err409d["409 TRANSICION_INVALIDA<br/>(carrera real)"] --> End2
+    FilasC2 -- No --> UpdateItems["UPDATE TransferItem SET quantity_approved<br/>WHERE quantity_approved IS NULL (por línea)"]
+    UpdateItems --> CommitC2[["COMMIT"]]
     CommitC2 --> NotifSolicitante[SSE al solicitante] --> End2
 ```
 
@@ -305,188 +213,126 @@ flowchart TD
 
 | Campo | Detalle |
 |---|---|
+| **Servicio real** | `TransferService.dispatch` |
 | **Actor** | Operador de la sucursal origen. |
-| **Precondiciones** | `Transfer.status = APPROVED`. |
-| **Lecturas necesarias** | `TransferItem.quantity_approved`; `Inventory(producto, sucursal origen)` con `version`. |
-| **Validaciones** | `quantity_shipped ≤ quantity_approved` (BR-013); `Inventory.quantity_on_hand ≥ quantity_shipped` **revalidado en este momento**, no solo en la aprobación (BR-013 — ver escenario 3.2). |
 | **Cambios de estado** | `APPROVED → IN_TRANSIT`. |
-| **Cambios de stock** | `Inventory(origen).quantity_on_hand -= quantity_shipped`. |
+| **Cambios de stock** | `Inventory(origen).quantity_on_hand -= quantity_shipped`, por línea. |
 | **InventoryMovement generado** | `direction=RETIRO`, `reason=TRANSFERENCIA_SALIDA`, `transfer_item_id` poblado. |
-| **Límites de la transacción** | Update de `TransferItem.quantity_shipped`, `Transfer.status`, `Inventory` y el `InventoryMovement`, todo atómico. |
-| **Locking/concurrencia** | Optimista sobre `Inventory.version` (compite directamente con ventas concurrentes del mismo producto/sucursal — escenario 3.2); Categoría 1 sobre `Transfer.status` (`WHERE status='APPROVED'`). |
-| **Idempotencia** | Categoría 1 — despachar es un evento único por transferencia; un reintento ve `status ≠ APPROVED` y recibe 409, sin necesidad de `idempotency_key`. |
-| **Errores posibles** | 422 `CANTIDAD_DESPACHO_EXCEDE_APROBADO`, 422 `STOCK_INSUFICIENTE`, 409 `TRANSICION_INVALIDA`, 409 `CONFLICTO_CONCURRENCIA`. |
-| **Eventos posteriores al commit** | SSE de inventario actualizado (origen); notificación a destino: "en tránsito", con transportista y fecha estimada. |
-| **Pruebas críticas** | Escenario 3.2 completo (venta y despacho compitiendo por el mismo stock); despacho duplicado por reintento HTTP se rechaza. |
-
-**Pseudocódigo:**
-
-```
-FUNCTION despacharTransferencia(transferItemId, cantidadDespacho, transportista, fechaEstimada, usuarioId):
-  BEGIN TRANSACTION
-    item = SELECT TransferItem WHERE id = transferItemId
-    transfer = SELECT Transfer WHERE id = item.transfer_id
-    filasEstado = UPDATE Transfer SET status = IN_TRANSIT
-                    WHERE id = transfer.id AND status = APPROVED
-    IF filasEstado == 0: RAISE 409 TRANSICION_INVALIDA           // ya despachada o no aprobada
-
-    IF cantidadDespacho > item.quantity_approved:
-        RAISE 422 CANTIDAD_DESPACHO_EXCEDE_APROBADO
-
-    intentos = 0
-    REPEAT:
-        inventario = SELECT Inventory WHERE product=item.product_id AND branch=transfer.origin_branch_id
-        IF inventario.quantity_on_hand < cantidadDespacho:
-            RAISE 422 STOCK_INSUFICIENTE          // el stock pudo consumirse desde la aprobación (escenario 3.2)
-        filas = UPDATE Inventory
-                  SET quantity_on_hand = quantity_on_hand - cantidadDespacho,
-                      version = inventario.version + 1
-                  WHERE id = inventario.id AND version = inventario.version
-        IF filas == 0:
-            intentos += 1
-            IF intentos >= 3: RAISE 409 CONFLICTO_CONCURRENCIA
-            CONTINUE REPEAT
-    UNTIL filas == 1
-
-    UPDATE TransferItem SET quantity_shipped = cantidadDespacho WHERE id = item.id
-    UPDATE Transfer SET carrier_name = transportista, estimated_arrival_date = fechaEstimada,
-                         dispatched_at = now() WHERE id = transfer.id
-    crear InventoryMovement(RETIRO, TRANSFERENCIA_SALIDA, cantidadDespacho, usuarioId,
-                             transfer_item_id = item.id)
-  COMMIT
-
-  publicarEventoSSE("inventario.actualizado", transfer.origin_branch_id, item.product_id)
-  publicarEventoSSE("transferencia.en_transito", transfer.destination_branch_id, transfer.id)
-```
+| **† Orden real, mismo patrón que C2** | Chequeo de estado en memoria (`requireStatus`, `APPROVED`) → validaciones 422 (`DESPACHO_INCOMPLETO`, `CANTIDAD_DESPACHO_EXCEDE_APROBADO`, `LINEA_DUPLICADA_EN_SOLICITUD`) → **recién ahí** `UPDATE Transfer ... WHERE status='APPROVED'` atómico real → bloqueo optimista sobre `Inventory.version` por línea (compite con ventas, escenario 3.2) → guarda atómica por línea `UPDATE TransferItem SET quantity_shipped ... WHERE quantity_shipped IS NULL`. |
+| **† Regla no documentada originalmente** | `DESPACHO_INCOMPLETO` — todas las líneas aprobadas deben despacharse juntas en una sola solicitud. |
+| **Errores reales** | `TRANSICION_INVALIDA`, `CANTIDAD_DESPACHO_EXCEDE_APROBADO`, `STOCK_INSUFICIENTE`, `CONFLICTO_CONCURRENCIA`, `CANTIDAD_INVALIDA`, `DESPACHO_INCOMPLETO`, `LINEA_DUPLICADA_EN_SOLICITUD`. |
+| **Idempotencia** | Categoría 1 — sin `idempotency_key`; un reintento ve `status ≠ APPROVED` (o el guard por línea ya poblado) y recibe 409. |
 
 **Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: despachar transferencia]) --> UpdateEstado["UPDATE Transfer SET IN_TRANSIT<br/>WHERE status=APPROVED"]
+    Start([Inicio: despachar transferencia]) --> CheckEstado{"¿status == APPROVED?<br/>(chequeo en memoria)"}
+    CheckEstado -- No --> Err409a[409 TRANSICION_INVALIDA] --> End([Fin])
+    CheckEstado -- Sí --> CheckCompleto{"¿todas las líneas<br/>en un solo despacho?"}
+    CheckCompleto -- No --> Err422inc[422 DESPACHO_INCOMPLETO] --> End
+    CheckCompleto -- Sí --> ValidarCant{"¿0 &lt; despacho ≤ aprobado,<br/>sin duplicados?"}
+    ValidarCant -- No --> Err422a["422 CANTIDAD_DESPACHO_EXCEDE_APROBADO /<br/>LINEA_DUPLICADA_EN_SOLICITUD"] --> Rollback[ROLLBACK] --> End
+    ValidarCant -- Sí --> UpdateEstado["UPDATE Transfer SET IN_TRANSIT<br/>WHERE status=APPROVED (guarda real)"]
     UpdateEstado --> EstadoOk{"¿0 filas?"}
-    EstadoOk -- Sí --> Err409a[409 TRANSICION_INVALIDA] --> End([Fin])
-    EstadoOk -- No --> ValidarAprobado{"¿cantidad ≤ aprobada?"}
-    ValidarAprobado -- No --> Err422a[422 CANTIDAD_DESPACHO_EXCEDE_APROBADO] --> Rollback[ROLLBACK] --> End
-    ValidarAprobado -- Sí --> LeerInv[Leer Inventory origen + version]
+    EstadoOk -- Sí --> Err409b["409 TRANSICION_INVALIDA<br/>(carrera real)"] --> Rollback
+    EstadoOk -- No --> LoopLinea[Tomar siguiente línea]
+    LoopLinea --> LeerInv[Leer Inventory origen + version]
     LeerInv --> ValidarStock{"¿stock ≥ cantidad<br/>AHORA?"}
-    ValidarStock -- No --> Err422b["422 STOCK_INSUFICIENTE<br/>(pudo consumirse tras aprobar)"] --> Rollback
+    ValidarStock -- No --> Err422b["422 STOCK_INSUFICIENTE<br/>(consumido tras aprobar)"] --> Rollback
     ValidarStock -- Sí --> UpdateInv["UPDATE Inventory<br/>WHERE version = v"]
     UpdateInv --> InvOk{"¿0 filas?"}
     InvOk -- Sí --> Reintentar{"¿reintentos < 3?"}
     Reintentar -- Sí --> LeerInv
-    Reintentar -- No --> Err409b[409 CONFLICTO_CONCURRENCIA] --> Rollback
-    InvOk -- No --> RegistrarDespacho[Registrar transportista/fecha + quantity_shipped]
-    RegistrarDespacho --> CrearMov[Crear InventoryMovement TRANSFERENCIA_SALIDA]
-    CrearMov --> Commit[["COMMIT"]]
+    Reintentar -- No --> Err409c[409 CONFLICTO_CONCURRENCIA] --> Rollback
+    InvOk -- No --> UpdateItem["UPDATE TransferItem SET quantity_shipped<br/>WHERE quantity_shipped IS NULL"]
+    UpdateItem --> CrearMov[Crear InventoryMovement TRANSFERENCIA_SALIDA]
+    CrearMov --> MasLineas{"¿más líneas?"}
+    MasLineas -- Sí --> LoopLinea
+    MasLineas -- No --> Registrar[Registrar transportista + fecha estimada]
+    Registrar --> Commit[["COMMIT"]]
     Commit --> Publicar[Publicar SSE origen y destino] --> End
 ```
 
 ---
 
-### E. Recepción completa
+### E+F1. Recepción de transferencia — **unificado en un solo método real**
+
+**† Corrección estructural más importante de esta auditoría.** El diseño original documentaba "Recepción completa" (E) y "Recepción parcial" (F1) como dos flujos separados con dos endpoints distintos. **El código real tiene un único método, `TransferService.receive`**, que acepta una o varias líneas por solicitud (incluso un subconjunto de las líneas de la transferencia) y **difiere la transición de estado de la `Transfer` hasta que todas sus líneas tienen `quantity_received` registrado**. Solo entonces decide entre `RECEIVED_COMPLETE` (ninguna línea con faltante) y `RECEIVED_PARTIAL` (alguna línea con faltante).
 
 | Campo | Detalle |
 |---|---|
+| **Servicio real** | `TransferService.receive` |
 | **Actor** | Operador de la sucursal destino. |
-| **Precondiciones** | `Transfer.status = IN_TRANSIT`. |
-| **Lecturas necesarias** | `TransferItem.quantity_shipped`; `Inventory(producto, sucursal destino)` con `version`. |
-| **Validaciones** | `quantity_received = quantity_shipped` (si es menor, este flujo deriva al flujo F, no es un error); `quantity_received ≤ quantity_shipped` (BR-014). |
-| **Cambios de estado** | `IN_TRANSIT → RECEIVED_COMPLETE`. |
-| **Cambios de stock** | `Inventory(destino).quantity_on_hand += quantity_shipped`. |
-| **InventoryMovement generado** | `direction=INGRESO`, `reason=TRANSFERENCIA_ENTRADA`, `transfer_item_id` poblado. |
-| **Límites de la transacción** | Update de `TransferItem.quantity_received`, `Transfer.status`/`received_at`, `Inventory`, `InventoryMovement`, atómico. |
-| **Locking/concurrencia** | Optimista sobre `Inventory.version`; Categoría 1 sobre `Transfer.status` (`WHERE status='IN_TRANSIT'`). |
-| **Idempotencia** | Categoría 1 — recibir es un evento único por transferencia; una segunda confirmación ve `status ≠ IN_TRANSIT` y recibe 409. |
-| **Errores posibles** | 409 `TRANSICION_INVALIDA`, 422 `RECEPCION_EXCEDE_ENVIADO`. |
-| **Eventos posteriores al commit** | SSE de inventario actualizado (destino); registro de tiempo real de entrega para logística (RF-027, `received_at - dispatched_at`). |
-| **Pruebas críticas** | Escenario 3.3 (doble confirmación por reintento HTTP) — solo un `InventoryMovement` de ingreso, sin importar cuántas veces llegue la solicitud. |
+| **Precondición** | `Transfer.status = IN_TRANSIT`, comprobado en memoria **una sola vez** por solicitud (no por línea). |
+| **Por cada línea de la solicitud** | Guarda atómica por línea `UPDATE TransferItem SET quantity_received ... WHERE quantity_received IS NULL` (409 `RECEPCION_YA_REGISTRADA` si ya estaba fijada); valida `quantity_received ≤ quantity_shipped` (422 `RECEPCION_EXCEDE_ENVIADO`); calcula `quantity_missing`; incrementa `Inventory(destino)` (bloqueo optimista); crea `InventoryMovement` (`INGRESO`/`TRANSFERENCIA_ENTRADA`); si `quantity_missing > 0`, marca el evento de discrepancia abierta. |
+| **Al final de la solicitud** | Si **todas** las líneas de la `Transfer` (no solo las de esta solicitud) ya tienen `quantity_received`: `UPDATE Transfer SET status = RECEIVED_PARTIAL|RECEIVED_COMPLETE WHERE status = IN_TRANSIT`, eligiendo según si hubo algún faltante. Si quedan líneas sin recibir, la `Transfer` permanece `IN_TRANSIT`. |
+| **† Código de error real no anticipado** | `RECEPCION_YA_REGISTRADA` (409) — el diseño original atribuía este caso genéricamente a `TRANSICION_INVALIDA`. |
+| **Consecuencia sobre la sección 4 del diseño original** | La corrección "pendiente de aprobación" que proponía relajar la guarda a `WHERE status IN (IN_TRANSIT, RECEIVED_PARTIAL)` (para permitir recibir una segunda línea después de que la primera ya dejó la transferencia en `RECEIVED_PARTIAL`) **quedó obsoleta**: el problema que motivaba esa propuesta no puede ocurrir con este diseño, porque el estado de `Transfer` nunca se mueve hasta que la última línea pendiente se recibe. Se resolvió con un diseño distinto al propuesto, no implementando la propuesta original. |
+| **Evento de discrepancia** | No reutiliza `StockAlert` — evento propio (`transfer.discrepancy-opened`), consistente con la nota de diseño original. |
+
+**Diagrama de actividad** (reemplaza a los dos diagramas separados del diseño original):
+
+```mermaid
+flowchart TD
+    Start([Inicio: recibir transferencia<br/>uno o varios ítems]) --> CheckEstado{"¿status == IN_TRANSIT?<br/>(chequeo en memoria, una sola vez)"}
+    CheckEstado -- No --> Err409a[409 TRANSICION_INVALIDA] --> End([Fin])
+    CheckEstado -- Sí --> LoopLinea["Tomar siguiente línea<br/>de la solicitud (puede ser un subconjunto)"]
+    LoopLinea --> UpdateItem["UPDATE TransferItem SET quantity_received<br/>WHERE quantity_received IS NULL"]
+    UpdateItem --> YaRegistrada{"¿0 filas?"}
+    YaRegistrada -- Sí --> Err409b["409 RECEPCION_YA_REGISTRADA<br/>(código real, no genérico)"] --> Rollback[ROLLBACK] --> End
+    YaRegistrada -- No --> ValidarCant{"¿recibida ≤ enviada?"}
+    ValidarCant -- No --> Err422[422 RECEPCION_EXCEDE_ENVIADO] --> Rollback
+    ValidarCant -- Sí --> CalcularFaltante["quantity_missing = enviada − recibida"]
+    CalcularFaltante --> UpdateInv["UPDATE Inventory destino<br/>+= quantity_received (optimista)"]
+    UpdateInv --> CrearMov[Crear InventoryMovement TRANSFERENCIA_ENTRADA]
+    CrearMov --> HayFaltante{"¿quantity_missing > 0?"}
+    HayFaltante -- Sí --> NotifDiscrepancia[Marcar evento: discrepancia abierta]
+    HayFaltante -- No --> MasLineas
+    NotifDiscrepancia --> MasLineas{"¿más líneas<br/>en esta solicitud?"}
+    MasLineas -- Sí --> LoopLinea
+    MasLineas -- No --> TodasCompletas{"¿TODAS las líneas de la<br/>Transfer ya tienen quantity_received?"}
+    TodasCompletas -- No --> DejarTransito["Transfer permanece IN_TRANSIT<br/>(quedan líneas pendientes)"]
+    TodasCompletas -- Sí --> HuboAlgunFaltante{"¿alguna línea con<br/>quantity_missing > 0?"}
+    HuboAlgunFaltante -- Sí --> EstadoParcial["UPDATE Transfer SET RECEIVED_PARTIAL<br/>WHERE status=IN_TRANSIT"]
+    HuboAlgunFaltante -- No --> EstadoCompleta["UPDATE Transfer SET RECEIVED_COMPLETE<br/>WHERE status=IN_TRANSIT"]
+    DejarTransito --> Commit[["COMMIT"]]
+    EstadoParcial --> Commit
+    EstadoCompleta --> Commit
+    Commit --> Publicar["Publicar SSE (inventario + discrepancia si aplica)"] --> End
+```
+
+---
+
+### F2. Definir tratamiento de faltante y cerrar
+
+| Campo | Detalle |
+|---|---|
+| **Servicio real** | `TransferService.applyDiscrepancyTreatment` |
+| **Actor** | Gerente de sucursal. |
+| **Cambios de estado** | `TransferItem.discrepancy_treatment` fijado (guarda atómica `WHERE discrepancy_treatment IS NULL`); si todas las líneas de la `Transfer` ya están tratadas, `RECEIVED_PARTIAL → CLOSED`. |
+| **† El reenvío NO reutiliza el flujo C1** | El diseño original afirmaba que el tratamiento `REENVIO` "reutiliza el flujo C1 como sub-operación de la misma transacción". **Esto es falso.** El código construye la `Transfer`/`TransferItem` de reenvío directamente (`new Transfer(...)`, `new TransferItem(...)`), duplicando la lógica de creación de C1 en vez de invocar `TransferService.request(...)` — y por lo tanto **sin `idempotency_key`** (se pasa `clientReferenceId = null`) y sin las validaciones de C1 (que no son necesarias aquí porque los datos ya vienen de una transferencia válida, pero confirma que es código duplicado, no reutilizado). |
+| **† `TRATAMIENTO_INVALIDO` no existe** | Un valor de tratamiento fuera de `{REENVIO, AJUSTE, RECLAMACION}` falla en la deserialización JSON (400 genérico), no como un 422 de negocio con ese código. |
+| **† Código real para "línea sin faltante"** | `LINEA_SIN_FALTANTE` (404) — el diseño original solo decía "404 (línea sin faltante)" sin nombrar el código. |
+| **Errores reales** | `LINEA_SIN_FALTANTE`, `FALTANTE_YA_TRATADO`. |
 
 **Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: confirmar recepción completa]) --> UpdateEstado["UPDATE Transfer SET RECEIVED_COMPLETE<br/>WHERE status=IN_TRANSIT"]
-    UpdateEstado --> EstadoOk{"¿0 filas?"}
-    EstadoOk -- Sí --> Err409[409 TRANSICION_INVALIDA] --> End([Fin])
-    EstadoOk -- No --> ValidarCantidad{"¿recibida ≤ enviada?"}
-    ValidarCantidad -- No --> Err422[422 RECEPCION_EXCEDE_ENVIADO] --> Rollback[ROLLBACK] --> End
-    ValidarCantidad -- Sí --> UpdateInv["UPDATE Inventory destino<br/>+= quantity_shipped"]
-    UpdateInv --> CrearMov[Crear InventoryMovement TRANSFERENCIA_ENTRADA]
-    CrearMov --> RegistrarTiempo[Registrar received_at]
-    RegistrarTiempo --> Commit[["COMMIT"]]
-    Commit --> Publicar[Publicar SSE destino] --> End
-```
-
----
-
-### F. Recepción parcial con faltantes (y su cierre posterior)
-
-Dos sub-pasos, típicamente separados en el tiempo y con actores distintos: **F1** (registrar la recepción parcial, Operador destino) y **F2** (definir el tratamiento del faltante y eventualmente cerrar, Gerente).
-
-#### F1 — Registrar recepción parcial
-
-| Campo | Detalle |
-|---|---|
-| **Actor** | Operador de la sucursal destino. |
-| **Precondiciones** | `Transfer.status = IN_TRANSIT`; `0 ≤ quantity_received < quantity_shipped`. |
-| **Lecturas necesarias** | `TransferItem.quantity_shipped`; `Inventory(destino)` con `version`. |
-| **Validaciones** | `quantity_received ≤ quantity_shipped` (BR-014); `quantity_received < quantity_shipped` (si son iguales, es el flujo E, no este). |
-| **Cambios de estado** | `IN_TRANSIT → RECEIVED_PARTIAL`. |
-| **Cambios de stock** | `Inventory(destino).quantity_on_hand += quantity_received` (**solo** lo efectivamente recibido). |
-| **InventoryMovement generado** | `direction=INGRESO`, `reason=TRANSFERENCIA_ENTRADA`, cantidad = `quantity_received`. |
-| **Límites de la transacción** | Update de `TransferItem` (`quantity_received`, `quantity_missing = quantity_shipped - quantity_received`), `Transfer.status`, `Inventory`, `InventoryMovement`: todo atómico. |
-| **Locking/concurrencia** | Igual que el flujo E. |
-| **Idempotencia** | Categoría 1 — evento único por transferencia. |
-| **Errores posibles** | 409 `TRANSICION_INVALIDA`, 422 `RECEPCION_EXCEDE_ENVIADO`. |
-| **Eventos posteriores al commit** | SSE de inventario actualizado; **notificación de discrepancia abierta** a Gerente/Admin de la sucursal destino — *corrección de redacción sobre `docs/BUSINESS_RULES.md` BR-008: esta notificación no reutiliza `StockAlert` (que es específicamente para stock mínimo, BR-010); es un evento distinto, cuya condición de "abierta" se consulta directamente como `TransferItem.quantity_missing > 0 AND discrepancy_treatment IS NULL`, sin necesitar una tabla propia.* |
-| **Pruebas críticas** | Recepción de 45 de 50 unidades dispara correctamente `quantity_missing = 5` y el evento de discrepancia; recepción de 0 unidades (nada llegó) se acepta igual, con `quantity_missing = quantity_shipped`. |
-
-#### F2 — Definir tratamiento y cerrar
-
-| Campo | Detalle |
-|---|---|
-| **Actor** | Gerente de sucursal (destino u origen, según el tratamiento — supuesto pendiente ya señalado). |
-| **Precondiciones** | `TransferItem.quantity_missing > 0 AND discrepancy_treatment IS NULL`. |
-| **Lecturas necesarias** | `TransferItem`, todas las líneas de la `Transfer` (para evaluar si se puede cerrar). |
-| **Validaciones** | Tratamiento ∈ {`REENVIO`, `AJUSTE`, `RECLAMACION`} (BR-009); línea sin tratamiento previo. |
-| **Cambios de estado** | `TransferItem.discrepancy_treatment` fijado; si **todas** las líneas de la `Transfer` ya están tratadas (o no tenían faltante), `Transfer.status: RECEIVED_PARTIAL → CLOSED`. |
-| **Cambios de stock** | Ninguno directo en esta línea; si el tratamiento es `REENVIO`, se crea una nueva `Transfer` en `REQUESTED` por la cantidad faltante (reutiliza el flujo C1 como sub-operación de la misma transacción). |
-| **InventoryMovement generado** | Ninguno aquí (el reenvío generará los suyos propios cuando se despache, como cualquier transferencia). |
-| **Límites de la transacción** | Update de `TransferItem` (tratamiento) + creación de la `Transfer` de reenvío (si aplica) + eventual cierre de la `Transfer` original: todo en una única transacción — si falla la creación del reenvío, el tratamiento tampoco queda registrado (evita un tratamiento "decidido" sin su reenvío real). |
-| **Locking/concurrencia** | Categoría 1 sobre `TransferItem.discrepancy_treatment` (`UPDATE ... WHERE discrepancy_treatment IS NULL`). |
-| **Idempotencia** | Categoría 1 — un tratamiento ya definido no se puede reemplazar; un reintento ve la columna ya poblada y recibe 409. |
-| **Errores posibles** | 409 `FALTANTE_YA_TRATADO`, 422 `TRATAMIENTO_INVALIDO`, 404 (línea sin faltante). |
-| **Eventos posteriores al commit** | SSE de "faltante tratado"; si la `Transfer` se cerró, SSE de cierre; si se creó un reenvío, el evento de "nueva solicitud" del flujo C1. |
-| **Pruebas críticas** | Ver escenario 3.5 (recepción parcial con cierre posterior) — tratar una línea no cierra la transferencia si otra línea sigue sin tratar; tratar la última línea pendiente sí dispara el cierre; reintento de tratamiento sobre una línea ya tratada se rechaza sin efecto doble. |
-
-**Diagrama de actividad (F1 + F2):**
-
-```mermaid
-flowchart TD
-    StartF1([Inicio: recepción parcial]) --> UpdateEstadoF1["UPDATE Transfer SET RECEIVED_PARTIAL<br/>WHERE status=IN_TRANSIT"]
-    UpdateEstadoF1 --> EstadoOkF1{"¿0 filas?"}
-    EstadoOkF1 -- Sí --> Err409f1[409 TRANSICION_INVALIDA] --> EndF1([Fin F1])
-    EstadoOkF1 -- No --> ValidarCantF1{"¿recibida ≤ enviada?"}
-    ValidarCantF1 -- No --> Err422f1[422 RECEPCION_EXCEDE_ENVIADO] --> Rollback1[ROLLBACK] --> EndF1
-    ValidarCantF1 -- Sí --> CalcularFaltante[Calcular y guardar quantity_missing]
-    CalcularFaltante --> UpdateInvF1["UPDATE Inventory destino<br/>+= quantity_received"]
-    UpdateInvF1 --> CrearMovF1[Crear InventoryMovement TRANSFERENCIA_ENTRADA]
-    CrearMovF1 --> CommitF1[["COMMIT"]]
-    CommitF1 --> NotifDiscrepancia[SSE: discrepancia abierta] --> EndF1
-
-    NotifDiscrepancia -.-> StartF2([Gerente define tratamiento])
-    StartF2 --> UpdateTratamiento["UPDATE TransferItem SET discrepancy_treatment<br/>WHERE discrepancy_treatment IS NULL"]
+    Start([Inicio: definir tratamiento de faltante]) --> CheckFaltante{"¿línea tiene<br/>quantity_missing > 0?"}
+    CheckFaltante -- No --> Err404[404 LINEA_SIN_FALTANTE] --> End([Fin])
+    CheckFaltante -- Sí --> UpdateTratamiento["UPDATE TransferItem SET discrepancy_treatment<br/>WHERE discrepancy_treatment IS NULL"]
     UpdateTratamiento --> TratOk{"¿0 filas?"}
-    TratOk -- Sí --> Err409f2[409 FALTANTE_YA_TRATADO] --> EndF2([Fin F2])
-    TratOk -- No --> EsReenvio{"¿tratamiento = REENVIO?"}
-    EsReenvio -- Sí --> CrearReenvio[Crear nueva Transfer REQUESTED por el faltante]
+    TratOk -- Sí --> Err409[409 FALTANTE_YA_TRATADO] --> End
+    TratOk -- No --> EsReenvio{"¿tratamiento == REENVIO?"}
+    EsReenvio -- Sí --> CrearReenvio["Crear Transfer + TransferItem nuevos a mano<br/>(NO llama a request/C1 — código duplicado,<br/>sin idempotency_key)"]
     EsReenvio -- No --> CheckTodasTratadas
-    CrearReenvio --> CheckTodasTratadas{"¿todas las líneas<br/>ya tratadas?"}
-    CheckTodasTratadas -- Sí --> CerrarTransfer[Transfer → CLOSED]
+    CrearReenvio --> CheckTodasTratadas{"¿todas las líneas de la<br/>Transfer ya tratadas?"}
+    CheckTodasTratadas -- Sí --> CerrarTransfer["Transfer: RECEIVED_PARTIAL → CLOSED"]
     CheckTodasTratadas -- No --> CommitF2[["COMMIT"]]
     CerrarTransfer --> CommitF2
-    CommitF2 --> NotifCierre[SSE: tratamiento aplicado / cierre] --> EndF2
+    CommitF2 --> NotifCierre["Publicar SSE: tratamiento aplicado /<br/>cierre / nueva solicitud si hubo reenvío"] --> End
 ```
 
 ---
@@ -495,31 +341,27 @@ flowchart TD
 
 | Campo | Detalle |
 |---|---|
+| **Servicio real** | `InventoryMovementService.createAdjustment` |
 | **Actor** | Operador de inventario de la sucursal afectada. |
-| **Precondiciones** | Producto activo en esa sucursal. |
-| **Lecturas necesarias** | `Inventory(producto, sucursal)` con `version`. |
-| **Validaciones** | Cantidad > 0 (BR-012); `notes` (motivo) obligatorio y no vacío (BR-023, nueva — ver actualización a `docs/BUSINESS_RULES.md`); si `direction=RETIRO`, stock resultante ≥ 0. |
-| **Cambios de estado** | Ninguno — no hay máquina de estados para un ajuste. |
 | **Cambios de stock** | `+ cantidad` (`AJUSTE_INGRESO`) o `- cantidad` (`AJUSTE_RETIRO`). |
-| **InventoryMovement generado** | `direction` según corresponda, `reason=AJUSTE_INGRESO`/`AJUSTE_RETIRO`, sin FK a ningún documento comercial (`purchase_order_item_id`/`sale_item_id`/`transfer_item_id` todos nulos). |
-| **Límites de la transacción** | Update de `Inventory` + `InventoryMovement`, atómico — la operación más simple de todo el catálogo. |
-| **Locking/concurrencia** | Optimista sobre `Inventory.version`, igual que cualquier otro movimiento. |
-| **Idempotencia** | **Categoría 2** — un ajuste es un evento repetible por naturaleza (se pueden hacer varios ajustes al mismo producto en el mismo día), por lo que el estado no distingue un reintento de un segundo ajuste legítimo; requiere `idempotency_key`. |
-| **Errores posibles** | 400 (falta `notes`), 422 `CANTIDAD_INVALIDA`, 422 `STOCK_INSUFICIENTE` (si el retiro deja negativo), 403. |
-| **Eventos posteriores al commit** | SSE de inventario actualizado; alerta de stock mínimo si aplica (BR-010). |
-| **Pruebas críticas** | Ajuste sin `notes` se rechaza; ajuste de retiro mayor al stock disponible se rechaza; reenvío de la misma `idempotency_key` no duplica el efecto. |
+| **Locking/concurrencia** | Optimista sobre `Inventory.version`, MAX_RETRIES=3 — igual que los demás flujos. |
+| **⚠ Idempotencia — NO implementada, a diferencia de lo que afirma el diseño original** | El diseño original clasifica este flujo como categoría 2 y da por hecha su protección. **Verificado que no lo está**: `InventoryAdjustmentRequest` no tiene campo de clave de idempotencia; el controller no exige el header `Idempotency-Key`; el `InventoryMovement` se crea siempre con `idempotency_key = NULL`. **Un doble clic o un reintento HTTP duplica el efecto de un ajuste manual hoy.** Este es el único de los flujos "protegidos por categoría 2" que en realidad no tiene ninguna protección — riesgo real, no un supuesto de diseño. Queda como pendiente de corrección en el backend (fuera del alcance de esta auditoría de documentación). |
+| **† Orden real de validación** | El diseño original validaba `notes` (motivo) antes que `cantidad > 0`. El código hace lo contrario: `cantidad > 0` primero, `notes` después. |
+| **† Regla no documentada originalmente** | `MOTIVO_INCOMPATIBLE_CON_DIRECCION` — el `reason` opcional debe ser compatible con la `direction` (`DEVOLUCION`/`AJUSTE_INGRESO` solo válidos para `INGRESO`; `MERMA`/`AJUSTE_RETIRO` solo para `RETIRO`). |
+| **Errores reales** | `CANTIDAD_INVALIDA`, `NOTES_REQUERIDO`, `STOCK_INSUFICIENTE`, `CONFLICTO_CONCURRENCIA`, `MOTIVO_INCOMPATIBLE_CON_DIRECCION`, `SUCURSAL_NO_ENCONTRADA`, `SUCURSAL_INACTIVA`, `PRODUCTO_NO_ENCONTRADO`, `PRODUCTO_INACTIVO`, `UNIDAD_NO_SOPORTADA`. |
 
 **Diagrama de actividad:**
 
 ```mermaid
 flowchart TD
-    Start([Inicio: ajuste manual]) --> CheckIdemp{"¿idempotency_key<br/>ya usada?"}
-    CheckIdemp -- Sí --> Return[Retornar movimiento existente] --> End([Fin])
-    CheckIdemp -- No --> ValidarNotes{"¿motivo (notes)<br/>presente?"}
+    Start([Inicio: ajuste manual]) --> ValidarCantidad{"¿cantidad > 0?"}
+    ValidarCantidad -- No --> Err422a[422 CANTIDAD_INVALIDA] --> End([Fin])
+    ValidarCantidad -- Sí --> ValidarNotes{"¿motivo (notes)<br/>presente?"}
     ValidarNotes -- No --> Err400[400 NOTES_REQUERIDO] --> End
-    ValidarNotes -- Sí --> ValidarCantidad{"¿cantidad > 0?"}
-    ValidarCantidad -- No --> Err422a[422 CANTIDAD_INVALIDA] --> End
-    ValidarCantidad -- Sí --> EsRetiro{"¿dirección = RETIRO?"}
+    ValidarNotes -- Sí --> ResolverDatos["Resolver sucursal, producto,<br/>unidad de conversión"]
+    ResolverDatos --> ValidarMotivo{"¿reason compatible<br/>con direction?"}
+    ValidarMotivo -- No --> Err422m[422 MOTIVO_INCOMPATIBLE_CON_DIRECCION] --> End
+    ValidarMotivo -- Sí --> EsRetiro{"¿dirección == RETIRO?"}
     EsRetiro -- Sí --> ValidarStock{"¿stock ≥ cantidad?"}
     ValidarStock -- No --> Err422b[422 STOCK_INSUFICIENTE] --> End
     ValidarStock -- Sí --> UpdateInv
@@ -528,7 +370,7 @@ flowchart TD
     InvOk -- Sí --> Reintentar{"¿reintentos < 3?"}
     Reintentar -- Sí --> UpdateInv
     Reintentar -- No --> Err409[409 CONFLICTO_CONCURRENCIA] --> End
-    InvOk -- No --> CrearMov[Crear InventoryMovement AJUSTE]
+    InvOk -- No --> CrearMov["Crear InventoryMovement AJUSTE<br/>⚠ idempotency_key = NULL, sin protección real"]
     CrearMov --> CheckAlerta{"¿cruza umbral mínimo?"}
     CheckAlerta -- Sí --> GenerarAlerta[Generar/resolver StockAlert]
     CheckAlerta -- No --> Commit
@@ -538,70 +380,75 @@ flowchart TD
 
 ---
 
+### H. Devolución de venta — **flujo nuevo, ausente del diseño original**
+
+`SaleReturnService.createReturn`, `POST /sales/{id}/returns` (BR-052). No existía ninguna mención de este flujo en la versión de diseño de este documento.
+
+| Campo | Detalle |
+|---|---|
+| **Actor** | Operador de inventario (o Gerente/Admin) de la sucursal de la venta original. |
+| **Cambios de estado** | Ninguno sobre `Sale` — el comprobante original **nunca cambia de estado**; la devolución es un registro independiente. |
+| **Cambios de stock** | `Inventory.quantity_on_hand += cantidad devuelta`, al **costo promedio ya vigente** (no se recalcula `average_unit_cost`, a diferencia de una compra). |
+| **InventoryMovement generado** | `direction=INGRESO`, `reason=DEVOLUCION`, `sale_item_id` poblado. |
+| **Locking/concurrencia** | Doble bloqueo optimista: sobre `SaleItem.version` (nuevo, no documentado en ningún flujo anterior) y sobre `Inventory.version`. MAX_RETRIES=3. |
+| **Idempotencia** | Categoría 2 — clave derivada `idempotency_key_del_cliente + ":" + saleItemId` sobre `InventoryMovement.idempotency_key`, mismo patrón que el flujo B; comprobada antes que la validación de cantidad. |
+| **Tope de negocio** | `cantidad ≤ pendiente_por_devolver` (`SaleItem.pending()` = cantidad vendida − ya devuelta). |
+| **Errores reales** | `IDEMPOTENCY_KEY_REQUERIDO`, `VENTA_NO_ENCONTRADA`, `LINEA_VENTA_NO_ENCONTRADA`, `CANTIDAD_INVALIDA`, `CANTIDAD_DEVOLUCION_EXCEDE_VENDIDO`, `CONFLICTO_CONCURRENCIA`. |
+
+**Diagrama de actividad:**
+
+```mermaid
+flowchart TD
+    Start([Inicio: registrar devolución de venta]) --> DerivarClave["Derivar clave = Idempotency-Key + ':' + saleItemId"]
+    DerivarClave --> CheckIdemp{"¿InventoryMovement con<br/>esa clave ya existe?"}
+    CheckIdemp -- Sí --> Return[Retornar movimiento existente] --> SigLinea{"¿más líneas?"}
+    CheckIdemp -- No --> ResolverVenta{"¿venta y línea<br/>existen?"}
+    ResolverVenta -- No --> Err404["404 VENTA_NO_ENCONTRADA /<br/>LINEA_VENTA_NO_ENCONTRADA"] --> End([Fin])
+    ResolverVenta -- Sí --> ValidarCantidad{"¿0 &lt; cantidad ≤<br/>pendiente por devolver?"}
+    ValidarCantidad -- No --> Err422["422 CANTIDAD_INVALIDA /<br/>CANTIDAD_DEVOLUCION_EXCEDE_VENDIDO"] --> End
+    ValidarCantidad -- Sí --> UpdateItem["UPDATE SaleItem SET quantity_returned<br/>WHERE version = v (optimista)"]
+    UpdateItem --> ItemOk{"¿0 filas?"}
+    ItemOk -- Sí --> ReintentarItem{"¿reintentos < 3?"}
+    ReintentarItem -- Sí --> UpdateItem
+    ReintentarItem -- No --> Err409[409 CONFLICTO_CONCURRENCIA] --> End
+    ItemOk -- No --> UpdateInv["UPDATE Inventory += cantidad<br/>WHERE version = v<br/>(NO recalcula average_unit_cost)"]
+    UpdateInv --> InvOk{"¿0 filas?"}
+    InvOk -- Sí --> ReintentarInv{"¿reintentos < 3?"}
+    ReintentarInv -- Sí --> UpdateInv
+    ReintentarInv -- No --> Err409
+    InvOk -- No --> CrearMov["Crear InventoryMovement<br/>INGRESO/DEVOLUCION (idempotency_key derivada)"]
+    CrearMov --> SigLinea
+    SigLinea -- Sí --> DerivarClave
+    SigLinea -- No --> Commit[["COMMIT"]]
+    Commit --> Publicar[Publicar SSE] --> End
+```
+
+---
+
 ## 3. Análisis de escenarios críticos
 
-### 3.1 Dos operadores intentando vender las últimas unidades al mismo tiempo
+Los cinco escenarios de la versión original (3.1 a 3.5) siguen siendo válidos en su razonamiento de concurrencia — el mecanismo de bloqueo optimista y las guardas de estado que describen se confirmaron en el código. Dos precisiones tras la auditoría 2026-08-29:
 
-Contexto: `Inventory.quantity_on_hand = 5` para un producto en una sucursal; dos operadores, en dos terminales distintas, intentan confirmar cada uno una venta de 5 unidades casi al mismo tiempo (flujo A).
-
-- Ambas transacciones leen `Inventory` con `version = v` y ven `quantity_on_hand = 5 ≥ 5` — ambas pasan la validación de negocio (BR-002) porque, en el instante de la lectura, ninguna sabe de la otra.
-- Ambas intentan `UPDATE ... SET quantity_on_hand = 0, version = v+1 WHERE version = v`. Solo una de las dos transacciones llega primero al commit de esa fila; la base de datos garantiza que solo un `UPDATE` con `WHERE version = v` tiene éxito (la segunda ve `0` filas afectadas porque, para cuando ejecuta su `UPDATE`, la versión ya cambió a `v+1`).
-- La transacción perdedora reintenta (sección 1.2): relee `Inventory`, ahora ve `quantity_on_hand = 0`, y falla la validación de negocio con **422 `STOCK_INSUFICIENTE`** — no con un conflicto de concurrencia genérico, porque el reintento sí logra ejecutar su lectura y validación correctamente, solo que con el dato ya actualizado.
-- Resultado: exactamente una venta se confirma, la otra se rechaza limpiamente informando falta de stock. Ningún momento del proceso deja el stock en negativo ni confirma ambas ventas.
-- Prueba crítica correspondiente: prueba de integración con dos hilos/transacciones concurrentes reales (no secuenciales simuladas) sobre el mismo `Inventory.id`, verificando el resultado final y que ambas respuestas HTTP sean coherentes con lo ocurrido.
-
-### 3.2 Venta simultánea con despacho de transferencia
-
-Contexto: una `Transfer` fue `APPROVED` por 10 unidades de un producto en la sucursal origen, donde en ese momento había 10 unidades disponibles. Antes de que el Operador de origen alcance a despachar, otro Operador de la misma sucursal confirma una venta de 6 unidades del mismo producto.
-
-- La aprobación (flujo C2) **no reservó** stock (nota de diseño ya explicada) — el stock seguía disponible para venderse.
-- La venta (flujo A) y el despacho (flujo D) compiten por la **misma fila** `Inventory(producto, sucursal_origen)`, exactamente igual que en el escenario 3.1 — el mecanismo de bloqueo optimista no distingue "es una venta" de "es un despacho de transferencia": ambos son, para `Inventory`, la misma clase de operación de retiro.
-- Si la venta gana la carrera: el despacho, al revalidar (BR-013, obligatorio en este flujo y no opcional precisamente por este escenario), ve `quantity_on_hand = 4 < 10` y falla con **422 `STOCK_INSUFICIENTE`**, aunque la transferencia esté `APPROVED`. La transferencia queda en `APPROVED` sin poder avanzar hasta que el Operador ajuste la cantidad a despachar o se reponga stock — no es un estado de error del sistema, es un conflicto de negocio legítimo que un humano debe resolver (reajustar cantidad, esperar reabastecimiento, o rechazar/cancelar la transferencia — este último caso no está cubierto por la máquina de estados actual desde `APPROVED`, lo que se deja como una observación para una futura decisión de negocio, no se resuelve en este documento).
-- Si el despacho gana la carrera: se ejecuta primero, deja `quantity_on_hand = 0`, y la venta posterior falla con 422 `STOCK_INSUFICIENTE` como en el escenario 3.1.
-- Conclusión de diseño: **no existe una prioridad especial entre "venta" y "transferencia"** sobre el mismo stock — gana quien complete primero su transacción, y el bloqueo optimista garantiza que nunca se despache y se venda el mismo stock dos veces.
-- Prueba crítica: dos transacciones concurrentes reales, una ejecutando el flujo A y otra el flujo D sobre el mismo producto/sucursal, verificando que la suma de lo vendido más lo despachado nunca excede el stock inicial.
-
-### 3.3 Doble confirmación por reintento HTTP
-
-Contexto: un cliente HTTP (navegador, o un proxy intermedio) reenvía automáticamente una solicitud que no recibió confirmación de respuesta a tiempo (timeout), aunque el servidor sí la procesó.
-
-- **Para operaciones de Categoría 1** (aprobar, despachar, recibir completa/parcial, cerrar tratamiento — flujos C2, D, E, F1, F2): el segundo envío ejecuta el mismo `UPDATE ... WHERE status = <esperado>` que ya no encuentra la fila en ese estado (porque el primer envío ya la cambió) → `0` filas afectadas → **409**, sin ningún efecto adicional. El cliente puede interpretar el 409 como "ya se aplicó" y refrescar el estado real desde una lectura, en vez de tratarlo como una falla genuina.
-- **Para operaciones de Categoría 2** (venta — flujo A, recepción de compra — flujo B, ajuste manual — flujo G): el segundo envío, si trae la **misma** `idempotency_key` generada por el cliente en el primer intento (no una nueva), encuentra el registro ya creado (`Sale.client_reference_id` o `InventoryMovement.idempotency_key` con `UNIQUE`) y **retorna el mismo resultado sin reaplicar el efecto** — no es un error, es una respuesta idéntica a la del primer envío exitoso.
-- Riesgo explícitamente fuera de esta garantía: si el cliente genera una **nueva** `idempotency_key` en cada reintento (en vez de reutilizar la del intento original), el mecanismo no puede detectar la duplicación — esto es una responsabilidad del cliente (frontend), no del backend; se documenta aquí para que la implementación del frontend genere la clave una sola vez por acción de usuario y la reutilice en cualquier reintento automático.
-- Prueba crítica: simular el mismo request exacto (incluida la `idempotency_key`) enviado dos veces en sucesión inmediata para cada una de las cinco operaciones mencionadas, verificando en cada caso que el efecto de negocio (stock, movimientos, estado) ocurre exactamente una vez.
-
-### 3.4 Rollback si falla un paso intermedio
-
-Contexto: cualquier flujo con más de un paso de escritura (p. ej. flujo A con varias líneas, o flujo B que escribe `PurchaseOrderItem`, `Inventory` e `InventoryMovement`) sufre un fallo a mitad de camino (excepción no controlada, caída de conexión a base de datos, violación de un `CHECK` inesperada).
-
-- Todos los flujos de este documento están delimitados por una única transacción (`docs/ARCHITECTURE.md`, sección 7; principio 1.3 de este documento). Un fallo en cualquier paso intermedio revierte **todos** los pasos anteriores de esa misma transacción — no puede quedar, por ejemplo, un `InventoryMovement` insertado sin su correspondiente actualización de `Inventory`, ni una primera línea de venta confirmada mientras la segunda falla.
-- Caso concreto a probar: en una venta de dos líneas (flujo A), forzar que la segunda línea falle por `STOCK_INSUFICIENTE` después de que la primera ya "pasó" sus validaciones y escrituras dentro de la misma transacción — al hacer rollback, la primera línea también debe revertirse (su `InventoryMovement` no debe existir, su descuento de `Inventory` no debe persistir).
-- Los eventos SSE posteriores al commit (sección 1.3) nunca se publican si la transacción no llegó a comprometerse — evita notificar un cambio que en realidad no ocurrió.
-- Prueba crítica: prueba de integración con un punto de fallo inyectado (mock que lanza excepción) entre dos escrituras de la misma transacción, verificando que el estado final de la base de datos es idéntico al estado previo al intento (ninguna escritura parcial visible).
-
-### 3.5 Recepción parcial y posterior cierre
-
-Contexto: una `Transfer` con dos `TransferItem` (dos productos distintos) recibe una recepción parcial en ambas líneas (flujo F1, dos ejecuciones independientes, una por línea). El Gerente trata el faltante de la primera línea inmediatamente, pero solo decide el tratamiento de la segunda línea horas después.
-
-- Cada ejecución de F1 es su propia transacción — la recepción parcial de la línea 1 y la de la línea 2 no están acopladas entre sí; ambas dejan la `Transfer` en `RECEIVED_PARTIAL` (la segunda ejecución encuentra `status` ya en `RECEIVED_PARTIAL`, lo cual es válido — a diferencia de las transiciones de categoría 1 sobre un único recurso "de un solo uso", aquí varias líneas de la misma transferencia pueden recepcionarse por separado sin invalidarse entre sí; el `UPDATE ... WHERE status = IN_TRANSIT` de la segunda línea simplemente no vuelve a cambiar el estado si ya no está en `IN_TRANSIT`, pero sí debe permitir registrar su propia recepción — esto es una precisión de implementación: la guarda de estado para F1 debe operar sobre "la transferencia no está ya cerrada/rechazada", no estrictamente "está en IN_TRANSIT", para admitir la segunda línea después de que la primera ya movió el estado a RECEIVED_PARTIAL).
-- El tratamiento de la línea 1 (F2) es una transacción independiente que **no** cierra la `Transfer` todavía, porque la comprobación "¿todas las líneas ya tratadas?" encuentra la línea 2 sin `discrepancy_treatment` — la `Transfer` permanece en `RECEIVED_PARTIAL`, correctamente, hasta que la línea 2 también se trate.
-- Cuando, horas después, se trata la línea 2, la misma comprobación ahora encuentra ambas líneas tratadas y dispara el cierre (`RECEIVED_PARTIAL → CLOSED`) dentro de esa misma transacción.
-- Ningún reintento sobre la línea 1 puede reabrir o duplicar su tratamiento (BR-009, guarda de categoría 1) — el retraso entre tratar una línea y otra no representa un riesgo de concurrencia, solo de tiempo de negocio.
-- Prueba crítica: transferencia con dos líneas, recepción parcial en ambas, tratamiento de una sola línea no cierra la transferencia; tratamiento de la última línea pendiente sí la cierra; intentar tratar de nuevo una línea ya tratada (incluso después del cierre de la transferencia) se rechaza con 409 sin reabrir nada.
-
-**Nota de precisión que surge del análisis 3.5, a incorporar en el flujo F1:** la guarda de estado de F1 debe formularse como `UPDATE Transfer SET status = RECEIVED_PARTIAL WHERE status IN (IN_TRANSIT, RECEIVED_PARTIAL)` (permitiendo permanecer en `RECEIVED_PARTIAL` si otra línea ya lo dejó así) en vez de exigir estrictamente `IN_TRANSIT`, para no bloquear la recepción independiente de una segunda línea de la misma transferencia.
+- **Escenario 3.3 (doble confirmación por reintento HTTP):** para la recepción de transferencias (E+F1 unificado), el código real devuelve **409 `RECEPCION_YA_REGISTRADA`** ante un reintento sobre una línea ya recibida — no el `TRANSICION_INVALIDA` genérico que suponía el documento original. Además, esta protección es por **línea**, no por transferencia completa: dos líneas distintas de la misma transferencia pueden recibirse en solicitudes separadas sin interferirse (ver sección 1.3).
+- **Escenario 3.3, ajuste manual (flujo G):** **la garantía descrita ("el efecto de negocio ocurre exactamente una vez") NO se cumple para este flujo** — ver la advertencia de la sección G. Se mantiene aquí la referencia explícita para que quede trazable: de las operaciones que el escenario 3.3 afirma proteger, el ajuste manual es la excepción real confirmada.
+- **Escenario 3.5 (recepción parcial y cierre posterior):** el razonamiento sigue siendo válido para el flujo F2 (tratamiento de faltantes por línea, independiente en el tiempo), pero la premisa sobre F1 (que motivaba la corrección de guarda `WHERE status IN (...)`) ya no aplica tal cual — ver la explicación completa en la sección "E+F1" arriba. El fenómeno de fondo (dos líneas atendidas en momentos distintos sin interferirse) sigue siendo real y sigue estando cubierto, solo que por el diseño unificado de `receive(...)`, no por la guarda de estado relajada que este documento proponía originalmente.
 
 ---
 
-## 4. Ajustes adicionales al modelo de dominio identificados en este análisis (pendientes de aprobación)
+## 4. Ajustes al modelo de dominio — estado real verificado 2026-08-29
 
-Este análisis de flujos detalló mecanismos de concurrencia e idempotencia con precisión suficiente para descubrir necesidades de columnas no contempladas en `docs/DOMAIN_MODEL.md`. Se listan aquí para aprobación, siguiendo el mismo procedimiento ya usado para `Inventory.average_unit_cost`:
+La versión original de esta sección listaba 4 ítems como "pendientes de aprobación". Verificado su estado real en el código:
 
-1. **`PurchaseOrderItem.version`** (entero, bloqueo optimista): necesaria porque `quantity_received` es un agregado que puede incrementarse en varias recepciones parciales concurrentes sobre la misma línea (flujo B) — sin esta columna, dos recepciones simultáneas podrían sumarse incorrectamente por encima de lo ordenado.
-2. **`Sale.client_reference_id`** (texto, `UNIQUE`, nullable): clave de idempotencia provista por el cliente para la creación de una venta (flujo A, categoría 2).
-3. **`InventoryMovement.idempotency_key`** (texto, `UNIQUE` cuando no nulo): clave de idempotencia para operaciones de categoría 2 que generan un movimiento directamente sin un documento contenedor propio con su propio campo de referencia — recepción de compra (flujo B) y ajuste manual (flujo G).
-4. **Ajuste de guarda de estado en el flujo F1** (no es una columna nueva, es una corrección de la condición de actualización): `WHERE status IN (IN_TRANSIT, RECEIVED_PARTIAL)` en vez de `WHERE status = IN_TRANSIT`, para permitir recepciones parciales independientes por línea sin bloquear la segunda línea (ver escenario 3.5).
+1. **`PurchaseOrderItem.version`** — ✅ **implementado**. Confirmado en `PurchaseOrderItemRepository` y usado en el flujo B; el propio comentario de la clase `PurchaseOrderItem` señala que resuelve esta necesidad.
+2. **`Sale.client_reference_id`** — ✅ **implementado**, `UNIQUE`, usado en el flujo A.
+3. **`InventoryMovement.idempotency_key`** — ✅ **implementado**, pero **no para el caso que este documento anticipaba**: se usa en el flujo B (recepción de compra, clave derivada por línea) y en el flujo H (devolución de venta, mismo patrón) — **no se usa en el flujo G (ajuste manual)**, que era el caso concreto que esta sección proponía cubrir. Ver la advertencia de la sección G: sigue siendo un gap real.
+4. **Guarda de estado del flujo F1, `WHERE status IN (IN_TRANSIT, RECEIVED_PARTIAL)`** — ❌ **no se implementó tal cual, y ya no hace falta**. El código resolvió el mismo problema de fondo con un diseño distinto: `TransferService.receive` difiere la transición de estado de la `Transfer` hasta que todas sus líneas están atendidas, en vez de relajar la guarda de un estado ya alcanzado. Ver la sección "E+F1" arriba para el detalle completo — este ítem se considera cerrado, no pendiente.
+
+**Gaps reales adicionales encontrados en esta auditoría (no en la lista original):**
+
+5. **Ajuste manual de inventario (flujo G) sin idempotencia real** — ver advertencia en la sección G. Es la corrección de código más concreta y accionable que dejó esta auditoría.
+6. **`PurchaseOrderService.create` exige el header `Idempotency-Key` (400 si falta) pero no lo usa para deduplicar** — un reintento con la misma clave crea una segunda orden de compra. El propio código lo admite como limitación conocida en un comentario, pero `CRITICAL_FLOWS.md` nunca documentó este flujo de creación de orden como crítico — se deja registrado aquí porque es del mismo tipo de riesgo (categoría 2) que los demás flujos de este documento.
 
 ---
 
-**Documentos relacionados:** `docs/DOMAIN_MODEL.md`, `docs/BUSINESS_RULES.md` (actualizado junto con este documento), `docs/ARCHITECTURE.md`.
+**Documentos relacionados:** `docs/DOMAIN_MODEL.md`, `docs/BUSINESS_RULES.md`, `docs/ARCHITECTURE.md`, [diagramas de actividad (artifact)](https://claude.ai/code/artifact/ce3f0f4c-0fb7-4506-9a0a-422ec9f9cd36).

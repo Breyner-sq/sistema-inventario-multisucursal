@@ -145,10 +145,9 @@ public class LogisticsComplianceService {
 
     /**
      * docs/API_DESIGN.md, sección 6: este reporte es de "propia sucursal para
-     * {@code OPERATOR}; cualquiera para {@code MANAGER}/{@code ADMIN}" — la
-     * única excepción del sistema donde un {@code MANAGER} no queda acotado a
-     * su sucursal, porque comparar el desempeño entre sucursales es
-     * justamente el propósito del reporte.
+     * {@code OPERATOR}; cualquiera para {@code MANAGER}/{@code ADMIN}" —
+     * mismo criterio que {@code DashboardService.requireBranch}, no una
+     * excepción aislada.
      */
     private Long resolveBranchScope(Long requestedBranchId) {
         AuthenticatedUser user = (AuthenticatedUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

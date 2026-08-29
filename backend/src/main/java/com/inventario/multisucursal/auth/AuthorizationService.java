@@ -11,10 +11,12 @@ import org.springframework.stereotype.Component;
  * limiten tanto por rol como por la sucursal del usuario, no solo por rol.
  *
  * <p>{@code ADMIN} tiene alcance global (docs/DOMAIN_MODEL.md, sección 2.3) y
- * siempre pasa esta comprobación. No hay ningún módulo de negocio todavía que
- * la consuma en producción — se verifica end-to-end con un controlador de
- * prueba (ver {@code AuthorizationDemoController} en el código de test),
- * quedando lista para que los módulos futuros la reutilicen.
+ * siempre pasa esta comprobación. Ya la consumen en producción
+ * {@code DashboardService}, {@code InventoryMovementService},
+ * {@code PurchaseOrderService}, {@code PurchaseReceiptService},
+ * {@code SaleService}, {@code SaleReturnService} y {@code TransferService}
+ * (vía {@code requireBranchAccess}/{@code requireAnyBranchAccess}/
+ * {@code resolveBranchFilter}).
  */
 @Component("authz")
 public class AuthorizationService {
