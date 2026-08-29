@@ -267,6 +267,29 @@ describe("Historial de movimientos", () => {
     expect(await screen.findByText("Venta #77")).toBeInTheDocument();
   });
 
+  it("muestra el equivalente en unidad base cuando el movimiento usa una unidad alternativa", async () => {
+    seedSession("OPERATOR");
+    mockFetch(inventoryRoutes((url) =>
+      url.includes("/inventory-movements")
+        ? jsonResponse(200, page([movement({ quantity: 2, unitOfMeasureId: "2" })]))
+        : undefined,
+    ));
+    renderApp("/inventario/movimientos");
+
+    const table = await screen.findByRole("table");
+    // CJA tiene factor 12 hacia la unidad base (UND, PRODUCT_UNITS en catalog.ts): 2 × 12 = 24.
+    expect(within(table).getByText("= 24 UND")).toBeInTheDocument();
+  });
+
+  it("no muestra equivalente cuando el movimiento ya está en la unidad base", async () => {
+    seedSession("OPERATOR");
+    mockFetch(inventoryRoutes());
+    renderApp("/inventario/movimientos");
+
+    const table = await screen.findByRole("table");
+    expect(within(table).queryByText(/^=/)).not.toBeInTheDocument();
+  });
+
   it("aplica los filtros que llegan por la URL desde la tabla de inventario", async () => {
     seedSession("OPERATOR");
     const fetchSpy = mockFetch(inventoryRoutes());

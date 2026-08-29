@@ -1,12 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { listBranches } from "../../api/endpoints/branches";
 import { listMovements } from "../../api/endpoints/inventory";
+import { listProductUnits } from "../../api/endpoints/products";
 import { queryKeys } from "../../api/queryClient";
 import { AsyncBoundary } from "../../components/state/states";
 import { Pagination } from "../../components/ui/Pagination";
-import type { MovementReason } from "../../types/api";
+import type { InventoryMovement, MovementReason } from "../../types/api";
 import { productLabel, useProductIndex, useUnitsOfMeasure } from "../products/useCatalog";
 
 const PAGE_SIZE = 20;
@@ -63,6 +64,33 @@ export function MovementsPage() {
     queryKey: queryKeys.inventoryMovements(params),
     queryFn: () => listMovements(params),
   });
+
+  // Un movimiento guarda la cantidad tal como se transaccionó (1 "Lote"),
+  // nunca la reescribe en unidad base — correcto para trazabilidad (BR-001),
+  // pero por sí solo parece "no convertir" al compararlo contra el stock
+  // agregado, que sí está en base. Se resuelve el factor de cada producto
+  // presente en la página actual para mostrar el equivalente al lado.
+  const movementProductIds = Array.from(new Set((query.data?.content ?? []).map((movement) => movement.productId)));
+  const productUnitQueries = useQueries({
+    queries: movementProductIds.map((id) => ({
+      queryKey: queryKeys.productUnits(id),
+      queryFn: () => listProductUnits(id),
+      staleTime: 60_000,
+    })),
+  });
+  const productUnitsByProductId = new Map(
+    movementProductIds.map((id, index) => [id, productUnitQueries[index]?.data ?? []]),
+  );
+
+  function baseUnitEquivalent(movement: InventoryMovement): string | null {
+    const units = productUnitsByProductId.get(movement.productId) ?? [];
+    const line = units.find((unit) => unit.unitOfMeasureId === movement.unitOfMeasureId);
+    if (!line || line.baseUnit) return null;
+    const baseUnit = units.find((unit) => unit.baseUnit);
+    if (!baseUnit) return null;
+    const baseQuantity = Number((movement.quantity * line.conversionFactorToBase).toFixed(6));
+    return `${baseQuantity} ${baseUnit.unitCode}`;
+  }
 
   function setFilter(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -151,6 +179,10 @@ export function MovementsPage() {
                     <td>
                       {movement.direction === "INGRESO" ? "+" : "−"}
                       {movement.quantity} {unitsById.get(movement.unitOfMeasureId)?.code ?? ""}
+                      {(() => {
+                        const equivalent = baseUnitEquivalent(movement);
+                        return equivalent ? <p className="state__hint">= {equivalent}</p> : null;
+                      })()}
                     </td>
                     <td>
                       {movement.source
