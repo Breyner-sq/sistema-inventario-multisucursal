@@ -36,6 +36,15 @@
   --accent-pressed: #0059b3;
   --danger: #d70015;
 
+  /* Azul marino profundo, derivado del mismo matiz que --accent pero
+   * oscurecido para una superficie grande (la barra de módulos) — sobrio y
+   * "de marca" en vez de plano gris o del acento a pantalla completa, que
+   * resultaría demasiado intenso en una franja tan ancha. */
+  --nav-bg: #0a1f3d;
+  --nav-text: rgba(255, 255, 255, 0.72);
+  --nav-text-hover: #ffffff;
+  --nav-hover-bg: rgba(255, 255, 255, 0.08);
+
   /* Radios generosos y consistentes — "continuous corner" en vez de esquinas duras. */
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -161,15 +170,17 @@ a:hover { text-decoration: underline; }
 
 /*
  * Franja de navegación propia, separada de la identidad/sesión (ajuste
- * explícito de aspecto profesional y simetría): un fondo apenas distinguible
- * y un borde superior tenue le dan al menú de módulos su propia "banda"
- * visual, y `justify-content: center` reparte el espacio sobrante en partes
- * iguales a ambos lados del grupo de módulos en vez de dejarlo pegado a la
- * izquierda con un vacío asimétrico a la derecha.
+ * explícito de color pedido sobre el diseño de dos franjas ya aprobado):
+ * un color sólido (`--nav-bg`, azul marino derivado del mismo matiz que
+ * `--accent`) le da al menú de módulos su propia identidad visual — clara,
+ * pero sin repetir literalmente el azul de acento de botones/enlaces, que
+ * queda reservado para lo interactivo dentro del contenido. `justify-content:
+ * center` reparte el espacio sobrante en partes iguales a ambos lados del
+ * grupo de módulos en vez de dejarlo pegado a la izquierda con un vacío
+ * asimétrico a la derecha.
  */
 .app__nav-bar {
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  background: rgba(0, 0, 0, 0.015);
+  background: var(--nav-bg);
 }
 .app__nav-bar ul {
   display: flex;
@@ -193,19 +204,21 @@ a:hover { text-decoration: underline; }
   padding: 0.42rem 0.9rem;
   border-radius: var(--radius-pill);
   text-decoration: none;
-  color: var(--muted);
+  color: var(--nav-text);
   font-size: 0.88rem;
   font-weight: 500;
   transition: color var(--duration-fast) var(--ease-spring), background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
-.app__nav-bar a:hover { color: var(--text); background: rgba(0, 0, 0, 0.05); }
-/* Pastilla rellena de acento (en vez del tinte tenue anterior) para que el
- * módulo activo se lea de inmediato como el único estado "seleccionado",
- * con el mismo nivel de contraste que un botón primario del resto de la app. */
+.app__nav-bar a:hover { color: var(--nav-text-hover); background: var(--nav-hover-bg); }
+/* Pastilla blanca rellena (en vez del acento azul) para que el módulo activo
+ * destaque con el máximo contraste posible sobre el fondo marino, con el
+ * propio azul de acento como color de texto — sigue leyéndose como "lo
+ * seleccionado", coherente con el resto de la app, sin perderse contra un
+ * fondo ya azul. */
 .app__nav-bar a[aria-current="page"] {
-  color: #fff;
+  color: var(--accent);
   font-weight: 600;
-  background: var(--accent);
+  background: #ffffff;
   box-shadow: var(--shadow-sm);
 }
 .app__session { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; font-size: 0.9rem; }
@@ -236,11 +249,10 @@ a:hover { text-decoration: underline; }
   .app__brand { font-size: 0.92rem; }
   .app__brand-mark { width: 1.65rem; height: 1.65rem; }
   .app__menu-toggle { display: inline-flex; }
-  .app__nav-bar {
-    display: none;
-    background: none;
-    border-top: none;
-  }
+  /* El fondo marino se conserva al desplegarse (a diferencia de un fix
+   * anterior que lo quitaba): el texto de los ítems está pensado para verse
+   * sobre `--nav-bg`, no sobre el fondo claro de la página. */
+  .app__nav-bar { display: none; }
   .app__nav-bar[data-open="true"] { display: block; }
   .app__nav-bar ul { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.1rem; padding: 0.35rem 1rem 0.6rem; }
   .app__nav-bar a { width: 100%; padding: 0.6rem 0.75rem; }
