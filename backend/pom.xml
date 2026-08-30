@@ -132,10 +132,14 @@
     </dependency>
 
     <!--
-      Testcontainers con PostgreSQL real, exclusivamente para el test de arranque de
-      contexto + migraciones Flyway (ver FlywayMigrationIntegrationTest). Justificacion:
-      Flyway y sus constraints son especificos de PostgreSQL - probarlos contra H2 no
-      demostraria nada real. La version queda gestionada por el BOM heredado de
+      Testcontainers con PostgreSQL real: arranque de contexto + migraciones Flyway
+      (FlywayMigrationIntegrationTest) y las variantes "...PostgresTest" de las pruebas
+      de concurrencia (InventoryConcurrencyPostgresTest, SaleConcurrencyPostgresTest,
+      TransferConcurrencyPostgresTest - docs/TEST_STRATEGY.md, seccion 4). Justificacion:
+      Flyway y el comportamiento real de bloqueo/aborto de transaccion son especificos
+      de PostgreSQL - probarlos contra H2 no demostraria nada real. Todas usan
+      "disabledWithoutDocker = true": se omiten con gracia sin Docker, el resto de la
+      suite no depende de el. La version queda gestionada por el BOM heredado de
       spring-boot-starter-parent.
     -->
     <dependency>

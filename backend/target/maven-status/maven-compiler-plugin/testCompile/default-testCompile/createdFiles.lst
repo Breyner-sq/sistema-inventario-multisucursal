@@ -8,11 +8,13 @@ com/inventario/multisucursal/sales/SaleConcurrencyTest.class
 com/inventario/multisucursal/purchases/PurchaseReceiptRollbackTest.class
 com/inventario/multisucursal/products/ProductApiTest$InventoryPageResponse.class
 com/inventario/multisucursal/common/audit/AuditableTestEntity.class
+com/inventario/multisucursal/transfers/TransferConcurrencyPostgresTest.class
 com/inventario/multisucursal/sales/SaleApiTest.class
 com/inventario/multisucursal/reports/ReportExportApiTest$1.class
 com/inventario/multisucursal/common/reports/ReportRangeValidatorTest.class
 com/inventario/multisucursal/events/EventStreamApiTest$StreamResult.class
 com/inventario/multisucursal/dashboard/DashboardApiTest.class
+com/inventario/multisucursal/inventory/InventoryConcurrencyPostgresTest.class
 com/inventario/multisucursal/purchases/PurchaseOrderApiTest.class
 com/inventario/multisucursal/inventory/InventoryAdjustmentRollbackTest.class
 com/inventario/multisucursal/products/ProductApiTest.class
@@ -33,6 +35,7 @@ com/inventario/multisucursal/common/web/ErrorFormatTestController$SampleRequest.
 com/inventario/multisucursal/common/web/ErrorFormatTestController.class
 com/inventario/multisucursal/auth/AuthenticationFlowTest.class
 com/inventario/multisucursal/events/EventBroadcastTest.class
+com/inventario/multisucursal/sales/SaleConcurrencyPostgresTest.class
 com/inventario/multisucursal/reports/ReportExportApiTest.class
 com/inventario/multisucursal/auth/AuthenticationFlowTest$LoginResult.class
 com/inventario/multisucursal/transfers/TransferRollbackTest.class
