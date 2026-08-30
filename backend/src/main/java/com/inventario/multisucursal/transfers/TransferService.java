@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -241,7 +242,16 @@ public class TransferService {
             throw new ResourceConflictException("TRANSICION_INVALIDA", "La transferencia ya no está en estado APPROVED.");
         }
 
-        for (TransferItem item : items) {
+        // Orden determinista por producto, no el orden en que
+        // findByTransferId devolvió las líneas: dos transacciones
+        // concurrentes que tocan las mismas filas de Inventory en orden
+        // opuesto pueden producir un deadlock real de base de datos, no solo
+        // un reintento optimista (mismo hallazgo que SaleService.confirmSale,
+        // ver SaleOppositeOrderConcurrencyTest / docs/TEST_STRATEGY.md).
+        List<TransferItem> orderedItems = items.stream()
+                .sorted(Comparator.comparing(TransferItem::getProductId))
+                .toList();
+        for (TransferItem item : orderedItems) {
             BigDecimal quantityShipped = shippedByItem.get(item.getId());
             // BR-013 / escenario 3.2: el stock pudo consumirse por una venta desde la
             // aprobación, así que se revalida y descuenta aquí, compitiendo con ventas
@@ -272,9 +282,25 @@ public class TransferService {
         Map<Long, BigDecimal> receivedByItem = indexRequest(
                 request.items(), ReceiveTransferItemRequest::transferItemId, ReceiveTransferItemRequest::quantityReceived);
 
-        for (Map.Entry<Long, BigDecimal> entry : receivedByItem.entrySet()) {
-            TransferItem item = findItemOrThrow(entry.getKey(), transferId);
-            BigDecimal quantityReceived = entry.getValue();
+        // Orden determinista por producto, no el orden de llegada del
+        // payload: mismo motivo que dispatch(...) y SaleService.confirmSale
+        // — se resuelven las líneas de antemano (sin N+1 dentro del bucle,
+        // reutilizando el mismo findByTransferId que ya hace requireAllItemsPresent
+        // en las demás transiciones) para poder ordenarlas por productId antes
+        // de tocar Inventory (ver SaleOppositeOrderConcurrencyTest,
+        // docs/TEST_STRATEGY.md).
+        Map<Long, TransferItem> itemsById = transferItemRepository.findByTransferId(transferId).stream()
+                .collect(Collectors.toMap(TransferItem::getId, item -> item));
+        List<Long> orderedItemIds = receivedByItem.keySet().stream()
+                .sorted(Comparator.comparing(id -> {
+                    TransferItem item = itemsById.get(id);
+                    return item != null ? item.getProductId() : Long.MAX_VALUE;
+                }))
+                .toList();
+
+        for (Long itemId : orderedItemIds) {
+            TransferItem item = findItemOrThrow(itemId, transferId);
+            BigDecimal quantityReceived = receivedByItem.get(itemId);
 
             if (quantityReceived.compareTo(BigDecimal.ZERO) < 0) {
                 throw new BusinessRuleViolationException("CANTIDAD_INVALIDA", "La cantidad recibida no puede ser negativa.");

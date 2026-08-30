@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.inventario.multisucursal.InventarioApplicationTests
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.462 s -- in com.inventario.multisucursal.InventarioApplicationTests
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.392 s -- in com.inventario.multisucursal.InventarioApplicationTests

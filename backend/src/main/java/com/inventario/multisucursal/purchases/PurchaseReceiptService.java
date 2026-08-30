@@ -26,8 +26,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Recepción de compra (flujo B, docs/CRITICAL_FLOWS.md; RF-014, RF-016;
@@ -99,7 +102,24 @@ public class PurchaseReceiptService {
         List<PurchaseReceiptResponse.ReceivedItem> receivedItems = new ArrayList<>();
         List<PurchaseReceiptResponse.InventoryUpdate> inventoryUpdates = new ArrayList<>();
 
-        for (ReceiptItemRequest itemRequest : request.items()) {
+        // Orden determinista por producto, no el orden de llegada del payload
+        // ni el de las líneas de la orden — mismo motivo que
+        // SaleService.confirmSale: dos transacciones concurrentes que tocan
+        // las mismas dos filas de Inventory en orden opuesto pueden producir
+        // un deadlock real de base de datos, no solo un reintento optimista
+        // (ver SaleOppositeOrderConcurrencyTest, docs/TEST_STRATEGY.md).
+        // Ordenar por productId (resuelto de antemano, sin N+1 dentro del
+        // bucle) garantiza que cualquier transacción que toque los mismos
+        // productos los bloquee siempre en la misma secuencia.
+        Map<Long, Long> productIdByItemId = purchaseOrderItemRepository
+                .findAllById(request.items().stream().map(ReceiptItemRequest::purchaseOrderItemId).toList())
+                .stream()
+                .collect(Collectors.toMap(PurchaseOrderItem::getId, PurchaseOrderItem::getProductId));
+        List<ReceiptItemRequest> orderedItems = request.items().stream()
+                .sorted(Comparator.comparing(item -> productIdByItemId.getOrDefault(item.purchaseOrderItemId(), Long.MAX_VALUE)))
+                .toList();
+
+        for (ReceiptItemRequest itemRequest : orderedItems) {
             String derivedKey = idempotencyKey + ":" + itemRequest.purchaseOrderItemId();
             Optional<InventoryMovement> existingMovement = movementRepository.findByIdempotencyKey(derivedKey);
 

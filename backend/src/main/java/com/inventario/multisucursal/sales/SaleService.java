@@ -42,6 +42,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -140,7 +141,19 @@ public class SaleService {
         BigDecimal discountTotal = BigDecimal.ZERO;
         List<SaleItem> items = new ArrayList<>();
 
-        for (CreateSaleItemRequest itemRequest : request.items()) {
+        // Orden determinista por producto, no el orden de llegada del payload:
+        // dos ventas concurrentes con los mismos productos en orden distinto
+        // pueden, si no, bloquear la fila de Inventory de cada una en orden
+        // opuesto y producir un deadlock real de base de datos (confirmado con
+        // SaleOppositeOrderConcurrencyTest) — el UPDATE de applyWithdrawal
+        // retiene el lock de fila hasta el commit aunque el bloqueo sea
+        // optimista a nivel de aplicación (BR-022). Ordenar por productId
+        // garantiza que cualquier transacción que toque las mismas dos filas
+        // las bloquee siempre en la misma secuencia.
+        List<CreateSaleItemRequest> orderedItems = request.items().stream()
+                .sorted(Comparator.comparing(CreateSaleItemRequest::productId))
+                .toList();
+        for (CreateSaleItemRequest itemRequest : orderedItems) {
             if (itemRequest.quantity().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new BusinessRuleViolationException("CANTIDAD_INVALIDA", "La cantidad debe ser mayor que cero.");
             }
