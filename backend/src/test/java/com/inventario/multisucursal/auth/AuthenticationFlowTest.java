@@ -155,6 +155,29 @@ class AuthenticationFlowTest {
         assertThat(result.rawBody()).contains("\"code\":\"CUENTA_DESACTIVADA\"");
     }
 
+    @Test
+    void repeatedFailedLoginsAgainstTheSameEmailAreEventuallyRateLimited() throws Exception {
+        // Auditoría de seguridad: /auth/login no tenía ningún límite de
+        // intentos — un correo propio de esta prueba (no compartido con otras)
+        // para no dejar el bloqueo activo sobre "operator@test.local" y afectar
+        // otras pruebas de esta misma clase, ya que LoginRateLimiter vive en un
+        // bean singleton reutilizado entre métodos de prueba.
+        String targetEmail = "rate-limit-target@test.local";
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            LoginResult result = login(targetEmail, "wrong-password");
+            assertThat(result.status()).as("intento %d debe rechazarse por credenciales, no por límite todavía", attempt).isEqualTo(401);
+            assertThat(result.rawBody()).contains("\"code\":\"CREDENCIALES_INVALIDAS\"");
+        }
+
+        LoginResult blocked = login(targetEmail, "wrong-password");
+        assertThat(blocked.status()).isEqualTo(429);
+        assertThat(blocked.rawBody()).contains("\"code\":\"DEMASIADOS_INTENTOS\"");
+
+        // El bloqueo es por correo: otra cuenta sigue pudiendo iniciar sesión con normalidad.
+        LoginResult unaffected = login("operator@test.local", SEED_PASSWORD);
+        assertThat(unaffected.status()).isEqualTo(200);
+    }
+
     // ---- Token ausente / expirado / manipulado ----
 
     @Test

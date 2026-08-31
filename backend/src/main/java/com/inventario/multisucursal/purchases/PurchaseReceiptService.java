@@ -57,6 +57,18 @@ public class PurchaseReceiptService {
     private static final int QUANTITY_SCALE = 6;
     private static final int AVERAGE_COST_SCALE = 6;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_UP;
+    /**
+     * Auditoría de seguridad: el costo unitario de la recepción puede
+     * diferir legítimamente del pactado en la orden (BR-028), pero no tenía
+     * ningún límite — se comprobó en vivo que un valor absurdo (p. ej. un
+     * cero de más por error de tecleo) corrompe permanentemente el costo
+     * promedio ponderado de todo el stock del producto en la sucursal, sin
+     * ningún mecanismo para revertirlo. Tolerancia amplia y provisional (3×
+     * hacia arriba o hacia abajo) para no bloquear una fluctuación real de
+     * precio; el umbral exacto es una decisión de negocio pendiente de
+     * confirmar, no algo que este cambio decida por sí solo.
+     */
+    private static final BigDecimal MAX_RECEIPT_PRICE_DEVIATION_FACTOR = new BigDecimal("3");
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderItemRepository purchaseOrderItemRepository;
@@ -111,12 +123,15 @@ public class PurchaseReceiptService {
         // Ordenar por productId (resuelto de antemano, sin N+1 dentro del
         // bucle) garantiza que cualquier transacción que toque los mismos
         // productos los bloquee siempre en la misma secuencia.
-        Map<Long, Long> productIdByItemId = purchaseOrderItemRepository
+        Map<Long, PurchaseOrderItem> itemsById = purchaseOrderItemRepository
                 .findAllById(request.items().stream().map(ReceiptItemRequest::purchaseOrderItemId).toList())
                 .stream()
-                .collect(Collectors.toMap(PurchaseOrderItem::getId, PurchaseOrderItem::getProductId));
+                .collect(Collectors.toMap(PurchaseOrderItem::getId, item -> item));
         List<ReceiptItemRequest> orderedItems = request.items().stream()
-                .sorted(Comparator.comparing(item -> productIdByItemId.getOrDefault(item.purchaseOrderItemId(), Long.MAX_VALUE)))
+                .sorted(Comparator.comparing(request0 -> {
+                    PurchaseOrderItem resolved = itemsById.get(request0.purchaseOrderItemId());
+                    return resolved != null ? resolved.getProductId() : Long.MAX_VALUE;
+                }))
                 .toList();
 
         for (ReceiptItemRequest itemRequest : orderedItems) {
@@ -141,6 +156,7 @@ public class PurchaseReceiptService {
                 if (itemRequest.quantityReceived().compareTo(BigDecimal.ZERO) <= 0) {
                     throw new BusinessRuleViolationException("CANTIDAD_INVALIDA", "La cantidad recibida debe ser mayor que cero.");
                 }
+                requireReceiptPriceWithinRange(itemsById.get(itemRequest.purchaseOrderItemId()), itemRequest.unitPrice());
                 item = applyItemReceipt(itemRequest.purchaseOrderItemId(), order.getId(), itemRequest.quantityReceived());
                 inventory = applyInventoryReceipt(item.getProductId(), order.getBranchId(), item.getUnitOfMeasureId(), itemRequest.quantityReceived(), itemRequest.unitPrice());
                 movementRepository.save(new InventoryMovement(
@@ -173,6 +189,30 @@ public class PurchaseReceiptService {
         order = purchaseOrderRepository.save(order);
 
         return new PurchaseReceiptResponse(String.valueOf(order.getId()), order.getStatus(), receivedItems, inventoryUpdates);
+    }
+
+    /**
+     * Auditoría de seguridad: sin este límite, un costo de recepción
+     * absurdo (fuera de un múltiplo razonable del pactado) corrompe
+     * permanentemente {@code Inventory.averageUnitCost} — ver el javadoc de
+     * {@link #MAX_RECEIPT_PRICE_DEVIATION_FACTOR}. Si {@code item} es
+     * {@code null} (línea inexistente), no valida nada aquí: el 404 real lo
+     * lanza {@link #findItemOrThrow} inmediatamente después, en
+     * {@link #applyItemReceipt}.
+     */
+    private void requireReceiptPriceWithinRange(PurchaseOrderItem item, BigDecimal receivedUnitPrice) {
+        if (item == null) {
+            return;
+        }
+        BigDecimal agreedUnitPrice = item.getUnitPrice();
+        BigDecimal upperBound = agreedUnitPrice.multiply(MAX_RECEIPT_PRICE_DEVIATION_FACTOR);
+        BigDecimal lowerBound = agreedUnitPrice.divide(MAX_RECEIPT_PRICE_DEVIATION_FACTOR, AVERAGE_COST_SCALE, ROUNDING);
+        if (receivedUnitPrice.compareTo(upperBound) > 0 || receivedUnitPrice.compareTo(lowerBound) < 0) {
+            throw new BusinessRuleViolationException(
+                    "PRECIO_RECEPCION_FUERA_DE_RANGO",
+                    "El precio de recepción (" + receivedUnitPrice + ") se aleja demasiado del pactado en la orden ("
+                            + agreedUnitPrice + "). Verifica el valor o registra la recepción con el precio correcto.");
+        }
     }
 
     /** BR-022/BR-017 aplicado a {@code PurchaseOrderItem.version} (docs/CRITICAL_FLOWS.md, flujo B). */

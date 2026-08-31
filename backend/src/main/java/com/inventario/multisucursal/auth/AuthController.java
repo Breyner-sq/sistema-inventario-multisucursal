@@ -26,14 +26,20 @@ public class AuthController {
 
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public AuthController(AuthenticationManager authenticationManager, JwtService jwtService) {
+    public AuthController(AuthenticationManager authenticationManager, JwtService jwtService, LoginRateLimiter loginRateLimiter) {
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
+        // Auditoría de seguridad: sin este límite, /auth/login no tenía tope de
+        // intentos — ver LoginRateLimiter.
+        loginRateLimiter.checkNotBlocked(request.email());
+
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
@@ -44,13 +50,16 @@ public class AuthController {
             // DaoAuthenticationProvider comprueba isEnabled() antes que la
             // contraseña, así que esto se dispara incluso con la contraseña
             // incorrecta sobre una cuenta desactivada.
+            loginRateLimiter.recordFailure(request.email());
             throw new DisabledAccountException();
         } catch (AuthenticationException ex) {
             // BadCredentialsException (password incorrecta) y UsernameNotFoundException
             // (email inexistente) se tratan igual a propósito - ver InvalidCredentialsException.
+            loginRateLimiter.recordFailure(request.email());
             throw new InvalidCredentialsException();
         }
 
+        loginRateLimiter.recordSuccess(request.email());
         User user = ((AppUserDetails) authentication.getPrincipal()).getUser();
         AuthenticatedUser authenticatedUser =
                 new AuthenticatedUser(user.getId(), user.getName(), user.getEmail(), user.getRoleCode(), user.getBranchId());

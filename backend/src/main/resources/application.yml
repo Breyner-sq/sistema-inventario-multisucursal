@@ -44,7 +44,13 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: always
+      # Auditoría de seguridad: /actuator/** es publico (SecurityConfig,
+      # permitAll - lo necesita el healthcheck de docker-compose, que no
+      # manda token). "always" filtraba rutas de disco, capacidad y motor de
+      # BD a cualquiera sin autenticar; con "never" el publico solo ve
+      # {"status":"UP"} - el detalle no aporta nada a un healthcheck de
+      # infraestructura, que solo mira el status.
+      show-details: never
 
 logging:
   # Patron minimo con requestId de correlacion (ver common.web.CorrelationIdFilter)

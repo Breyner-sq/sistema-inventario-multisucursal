@@ -10,9 +10,11 @@
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/JwtAuthenticationFilter.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/JwtProperties.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/JwtService.java
+/Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/LoginRateLimiter.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/LoginRequest.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/LoginResponse.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/SecurityConfig.java
+/Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/TooManyLoginAttemptsException.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/auth/UserSummaryResponse.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/branches/Branch.java
 /Users/breyner/Documents/GitHub/sistema-inventario-multisucursal/backend/src/main/java/com/inventario/multisucursal/branches/BranchController.java

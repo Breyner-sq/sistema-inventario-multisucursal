@@ -305,6 +305,40 @@ class PurchaseReceiptApiTest {
     }
 
     @Test
+    void receivingWithAnAbsurdUnitPriceIsRejected() {
+        // Auditoría de seguridad: un costo de recepción muy alejado del pactado
+        // (aquí, 15 pactado vs. 999999 recibido) corrompía permanentemente el
+        // costo promedio ponderado sin ninguna validación — reproducido en vivo
+        // contra el stack real antes de este fix.
+        String productId = createProduct("SKU-INV-PRICE-001");
+        PurchaseOrderResponse order = createOrder(branchA.getId(), productId, 10, 15, null, operatorAToken);
+        String itemId = order.items().get(0).id();
+
+        ResponseEntity<String> response = receive(
+                order.id(), List.of(Map.of("purchaseOrderItemId", Long.valueOf(itemId), "quantityReceived", 1, "unitPrice", 999999)),
+                UUID.randomUUID().toString(), operatorAToken, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody()).contains("\"code\":\"PRECIO_RECEPCION_FUERA_DE_RANGO\"");
+    }
+
+    @Test
+    void receivingWithAPriceWithinAWideButReasonableRangeIsAccepted() {
+        // Una fluctuación real de precio (aquí, casi el doble del pactado) no
+        // debe bloquearse — el límite existe para errores absurdos, no para
+        // variaciones legítimas de mercado.
+        String productId = createProduct("SKU-INV-PRICE-002");
+        PurchaseOrderResponse order = createOrder(branchA.getId(), productId, 10, 15, null, operatorAToken);
+        String itemId = order.items().get(0).id();
+
+        PurchaseReceiptResponse response = receive(
+                order.id(), List.of(Map.of("purchaseOrderItemId", Long.valueOf(itemId), "quantityReceived", 10, "unitPrice", 28)),
+                UUID.randomUUID().toString(), operatorAToken, PurchaseReceiptResponse.class).getBody();
+
+        assertThat(response.status()).isEqualTo(PurchaseOrderStatus.RECEIVED);
+    }
+
+    @Test
     void receivingAnAlreadyReceivedOrderIsRejected() {
         String productId = createProduct("SKU-INV-003");
         PurchaseOrderResponse order = createOrder(branchA.getId(), productId, 5, 15, null, operatorAToken);

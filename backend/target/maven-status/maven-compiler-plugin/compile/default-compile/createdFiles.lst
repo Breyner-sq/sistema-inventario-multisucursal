@@ -31,6 +31,7 @@ com/inventario/multisucursal/products/PriceResponse.class
 com/inventario/multisucursal/dashboard/SalesTrendResponse.class
 com/inventario/multisucursal/purchases/PurchaseReceiptRequest.class
 com/inventario/multisucursal/config/JacksonConfig.class
+com/inventario/multisucursal/auth/TooManyLoginAttemptsException.class
 com/inventario/multisucursal/common/web/GlobalExceptionHandler.class
 com/inventario/multisucursal/reports/ReportSheet.class
 com/inventario/multisucursal/reports/LogisticsComplianceResponse$AppliedFilters.class
@@ -66,6 +67,7 @@ com/inventario/multisucursal/auth/AppUserDetailsService.class
 com/inventario/multisucursal/purchases/CreatePurchaseOrderItemRequest.class
 com/inventario/multisucursal/transfers/ApplyDiscrepancyTreatmentRequest.class
 com/inventario/multisucursal/inventory/MovementDirection.class
+com/inventario/multisucursal/auth/LoginRateLimiter$Attempts.class
 com/inventario/multisucursal/sales/SaleController.class
 com/inventario/multisucursal/purchases/PurchaseOrder.class
 com/inventario/multisucursal/logistics/RouteController.class
@@ -161,6 +163,7 @@ com/inventario/multisucursal/inventory/StockAlertResponse.class
 com/inventario/multisucursal/transfers/TransferItem.class
 com/inventario/multisucursal/reports/ReportExportService.class
 com/inventario/multisucursal/reports/ExcelReportWriter$1.class
+com/inventario/multisucursal/auth/LoginRateLimiter.class
 com/inventario/multisucursal/sales/SaleStatus.class
 com/inventario/multisucursal/auth/JpaAuditingConfig.class
 com/inventario/multisucursal/suppliers/UpdateSupplierRequest.class

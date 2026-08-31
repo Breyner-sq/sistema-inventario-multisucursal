@@ -5,6 +5,8 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -23,10 +25,28 @@ import java.util.Date;
 @Service
 public class JwtService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+
+    /**
+     * Mismo valor por defecto que {@code application.yml}/{@code docker-compose.yml}/
+     * {@code .env.example} — auditoría de seguridad: no se rechaza el arranque con
+     * este valor (RT-003 exige que `docker compose up` funcione sin configuración
+     * manual adicional, y hoy es exactamente ese el flujo que lo usa), pero un
+     * despliegue real que lo conserve queda con las claves de firma de cualquier
+     * JWT publicadas en el propio repositorio — se advierte en el arranque para
+     * que no pase desapercibido.
+     */
+    private static final String INSECURE_DEFAULT_SECRET = "dev-only-insecure-secret-please-override-with-JWT_SECRET-env-var-2026";
+
     private final SecretKey key;
     private final long expirationMs;
 
     public JwtService(JwtProperties properties) {
+        if (INSECURE_DEFAULT_SECRET.equals(properties.secret())) {
+            log.warn("*** JWT_SECRET no está configurado: se está usando el valor por defecto de desarrollo, "
+                    + "publicado en el repositorio. Cualquiera puede forjar tokens válidos, incluido role=ADMIN. "
+                    + "Defina JWT_SECRET (openssl rand -base64 48) antes de exponer este backend fuera de un entorno local. ***");
+        }
         this.key = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
         this.expirationMs = properties.expirationMs();
     }
